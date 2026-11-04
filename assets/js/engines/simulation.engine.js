@@ -1,71 +1,59 @@
 
 import { BaseEngine } from "./engine.js";
+import {
+  createBusinessPlan,
+  generateAgentResult,
+  generateCEOReport
+} from "../simulation/business.simulator.js";
 
 const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
 
 export class SimulationEngine extends BaseEngine {
   constructor() {
     super("simulation");
+    this.plan = null;
+    this.results = {};
   }
 
   async runCEO(command, context = {}) {
-    await wait(700);
+    await wait(1200);
+
+    this.plan = createBusinessPlan(command);
+    this.results = {};
 
     return {
       engine: this.name,
       type: "simulation",
-      summary: `CEO menerima perintah: "${command}"`,
-      decision: "Perintah diterima dan dibagi menjadi beberapa pekerjaan.",
-      limitations: "Ini hasil simulasi, bukan analisis AI sungguhan."
+      summary: `CEO membuat rencana bisnis untuk ${this.plan.targetMarket}.`,
+      plan: this.plan,
+      decision: "CEO akan membagi pekerjaan kepada departemen yang relevan.",
+      limitations: "Skenario ini menggunakan asumsi simulasi."
     };
   }
 
   async runTask(task, context = {}) {
-    await wait(900);
+    const duration = {
+      ceo: 1000,
+      research: 2200,
+      product: 2200,
+      qa: 1600,
+      content: 2000,
+      sales: 1600,
+      finance: 1800
+    }[task.agentId] || 1200;
 
-    const templates = {
-      ceo: [
-        "Prioritas perusahaan perlu dimulai dari validasi masalah pelanggan.",
-        "CEO merekomendasikan riset pasar sebelum membuat produk.",
-        "Pekerjaan dibagi berdasarkan fungsi masing-masing departemen."
-      ],
-      research: [
-        "Simulasi riset: identifikasi masalah pelanggan, pesaing, dan kebutuhan pasar.",
-        "Simulasi riset: bandingkan alternatif solusi dan potensi permintaan.",
-        "Simulasi riset: susun hipotesis target pasar untuk divalidasi."
-      ],
-      product: [
-        "Simulasi produk: buat konsep, daftar fitur, dan struktur produk digital.",
-        "Simulasi produk: susun outline, manfaat, dan format produk.",
-        "Simulasi produk: siapkan rancangan produk untuk diperiksa QA."
-      ],
-      qa: [
-        "Simulasi QA: periksa kelengkapan, konsistensi, dan kemudahan penggunaan.",
-        "Simulasi QA: susun daftar pemeriksaan kualitas produk.",
-        "Simulasi QA: hasil pemeriksaan perlu divalidasi oleh Owner."
-      ],
-      content: [
-        "Simulasi konten: buat konten edukatif yang menjawab masalah audiens.",
-        "Simulasi konten: susun cerita, tips, dan pengalaman yang relevan.",
-        "Simulasi konten: hindari spam, klaim berlebihan, dan promosi agresif."
-      ],
-      sales: [
-        "Simulasi penjualan: evaluasi pertanyaan pelanggan dan hambatan pembelian.",
-        "Simulasi penjualan: susun pendekatan layanan pelanggan yang informatif."
-      ],
-      finance: [
-        "Simulasi keuangan: hitung estimasi biaya, harga, dan margin.",
-        "Simulasi keuangan: susun proyeksi pendapatan berdasarkan asumsi."
-      ]
-    };
+    await wait(duration);
 
-    const choices = templates[task.agentId] || [
-      "Pekerjaan diproses oleh Simulation Engine."
-    ];
+    const plan = context.plan || this.plan ||
+      createBusinessPlan(task.description);
 
-    const result = choices[
-      Math.floor(Math.random() * choices.length)
-    ];
+    const result = generateAgentResult(
+      task.agentId,
+      plan,
+      task.description
+    );
+
+    this.results[task.agentId] = result;
 
     return {
       engine: this.name,
@@ -73,16 +61,19 @@ export class SimulationEngine extends BaseEngine {
       taskId: task.id,
       agentId: task.agentId,
       result,
-      inputSummary: task.description,
-      limitations: "Hasil ini hanya simulasi dan belum divalidasi dengan data pasar."
+      limitations: "Hasil berdasarkan aturan dan asumsi simulasi, bukan data pasar aktual."
     };
+  }
+
+  createFinalReport(plan = this.plan) {
+    return generateCEOReport(plan, this.results);
   }
 
   async healthCheck() {
     return {
       ok: true,
       engine: this.name,
-      message: "Simulation Engine siap digunakan."
+      message: "Simulation Engine siap."
     };
   }
 }
