@@ -1,635 +1,561 @@
 
 import * as THREE from "three";
-import { AGENTS, MEETING_POSITION } from "../agents.js";
+import { AGENTS } from "../agents.js";
 import { getAgentState } from "../company.js";
 
-const clamp = (v, min, max) => Math.max(min, Math.min(max, v));
-
-function makeLabel(agent) {
-  const canvas = document.createElement("canvas");
-  canvas.width = 512;
-  canvas.height = 150;
-
-  const context = canvas.getContext("2d");
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-
-  const material = new THREE.SpriteMaterial({
-    map: texture,
-    transparent: true,
-    depthTest: false
-  });
-
-  const sprite = new THREE.Sprite(material);
-  sprite.scale.set(2.6, 0.76, 1);
-  sprite.position.y = 2.65;
-
-  sprite.userData.canvas = canvas;
-  sprite.userData.context = context;
-  sprite.userData.texture = texture;
-  sprite.userData.lastText = "";
-
-  updateLabel(sprite, agent, "Menunggu pekerjaan");
-  return sprite;
-}
-
-function updateLabel(sprite, agent, activity) {
-  const key = `${agent.name}|${activity}`;
-  if (sprite.userData.lastText === key) return;
-
-  const { canvas, context, texture } = sprite.userData;
-  context.clearRect(0, 0, canvas.width, canvas.height);
-
-  context.fillStyle = "rgba(13,24,40,0.94)";
-  context.beginPath();
-  context.roundRect(8, 8, 496, 134, 22);
-  context.fill();
-
-  context.strokeStyle = agent.color;
-  context.lineWidth = 6;
-  context.stroke();
-
-  context.fillStyle = "#ffffff";
-  context.font = "bold 35px Arial";
-  context.textAlign = "center";
-  context.fillText(agent.name, 256, 58);
-
-  context.fillStyle = "#b9d2ef";
-  context.font = "25px Arial";
-  context.fillText(activity.slice(0, 35), 256, 105);
-
-  texture.needsUpdate = true;
-  sprite.userData.lastText = key;
-}
+const MEETING_POSITION = [5, 0, 1];
 
 export class VirtualOffice {
   constructor(container) {
+    if (!container) {
+      throw new Error("Elemen officeScene tidak ditemukan.");
+    }
+
     this.container = container;
-    this.clock = new THREE.Clock();
-    this.characters = [];
-    this.onSelect = null;
-    this.frame = null;
-    this.isMeeting = false;
-
     this.scene = new THREE.Scene();
-    this.scene.background = new THREE.Color("#b9c9d8");
-    this.scene.fog = new THREE.Fog("#b9c9d8", 25, 55);
+    this.scene.background = new THREE.Color("#dce7f2");
 
-    this.camera = new THREE.PerspectiveCamera(38, 1, 0.1, 100);
-    this.camera.position.set(17, 19, 23);
+    this.camera = new THREE.PerspectiveCamera(
+      45,
+      container.clientWidth / Math.max(container.clientHeight, 1),
+      0.1,
+      100
+    );
+
+    this.camera.position.set(15, 15, 19);
+    this.camera.lookAt(0, 0, 0);
 
     this.renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false
     });
+
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.renderer.setSize(container.clientWidth, container.clientHeight);
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
-    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.1;
 
+    container.innerHTML = "";
     container.appendChild(this.renderer.domElement);
 
-    this.target = new THREE.Vector3(0, 0, 0);
-    this.pointer = new THREE.Vector2();
-    this.raycaster = new THREE.Raycaster();
-    this.drag = {
-      active: false,
-      moved: false,
-      x: 0,
-      y: 0,
-      theta: Math.PI / 4,
-      phi: 0.9,
-      radius: 30
-    };
+    this.clock = new THREE.Clock();
+    this.characters = [];
+    this.isMeeting = false;
+    this.selectedAgent = null;
+    this.pointer = null;
 
-    this.buildLights();
-    this.buildFloor();
-    this.buildRooms();
-    this.buildFurniture();
-    this.buildCharacters();
-    this.bindCamera();
-    this.resize();
+    this.createLights();
+    this.createFloor();
+    this.createWalls();
+    this.createRooms();
+    this.createFurniture();
+    this.createCharacters();
+    this.bindControls();
 
-    this.observer = new ResizeObserver(() => this.resize());
-    this.observer.observe(container);
+    this.animate = this.animate.bind(this);
+    this.renderer.setAnimationLoop(this.animate);
 
-    this.animate();
+    this.resizeHandler = () => this.resize();
+    window.addEventListener("resize", this.resizeHandler);
   }
 
-  mat(color, roughness = 0.75, metalness = 0) {
+  material(color, roughness = 0.8) {
     return new THREE.MeshStandardMaterial({
       color,
-      roughness,
-      metalness
+      roughness
     });
   }
 
-  box(x, y, z, sx, sy, sz, color, options = {}) {
+  addBox(parent, x, y, z, width, height, depth, color) {
     const mesh = new THREE.Mesh(
-      new THREE.BoxGeometry(sx, sy, sz),
-      this.mat(color, options.roughness ?? 0.75, options.metalness ?? 0)
+      new THREE.BoxGeometry(width, height, depth),
+      this.material(color)
     );
 
     mesh.position.set(x, y, z);
     mesh.castShadow = true;
     mesh.receiveShadow = true;
-    this.scene.add(mesh);
+    parent.add(mesh);
+
     return mesh;
   }
 
-  cylinder(x, y, z, radius, height, color) {
-    const mesh = new THREE.Mesh(
-      new THREE.CylinderGeometry(radius, radius, height, 20),
-      this.mat(color)
-    );
-    mesh.position.set(x, y, z);
-    mesh.castShadow = true;
-    this.scene.add(mesh);
-    return mesh;
+  createLights() {
+    this.scene.add(new THREE.HemisphereLight("#ffffff", "#8090a0", 2));
+
+    const light = new THREE.DirectionalLight("#ffffff", 2.2);
+    light.position.set(5, 14, 8);
+    light.castShadow = true;
+    light.shadow.mapSize.set(2048, 2048);
+
+    this.scene.add(light);
   }
 
-  buildLights() {
-    this.scene.add(new THREE.HemisphereLight("#ffffff", "#7c8b9c", 2.1));
-
-    const sun = new THREE.DirectionalLight("#ffffff", 2.6);
-    sun.position.set(-8, 18, 10);
-    sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
-    sun.shadow.camera.left = -20;
-    sun.shadow.camera.right = 20;
-    sun.shadow.camera.top = 20;
-    sun.shadow.camera.bottom = -20;
-    this.scene.add(sun);
-
-    const fill = new THREE.PointLight("#8abaff", 45, 35);
-    fill.position.set(0, 7, 0);
-    this.scene.add(fill);
-  }
-
-  buildFloor() {
+  createFloor() {
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(22, 18),
-      this.mat("#dce5ec", 0.92)
+      new THREE.BoxGeometry(22, 0.3, 16),
+      this.material("#e8edf2")
     );
-    floor.rotation.x = -Math.PI / 2;
+
+    floor.position.y = -0.2;
     floor.receiveShadow = true;
     this.scene.add(floor);
 
-    // Lantai area utama dan karpet meeting.
-    this.box(0, 0.015, 0, 21.5, 0.03, 17.5, "#dce5ec");
-    this.box(0, 0.035, 0, 20.5, 0.025, 16.5, "#cbd8e3");
-    this.box(5.5, 0.06, 2.2, 5.8, 0.04, 5.0, "#b5c7d8");
+    const grid = new THREE.GridHelper(22, 22, "#c2ced8", "#d5dde5");
+    grid.position.y = -0.035;
+    this.scene.add(grid);
   }
 
-  roomLabel(x, z, text) {
+  createWalls() {
+    this.addBox(this.scene, 0, 1.5, -8, 22, 3, 0.2, "#f7f9fb");
+    this.addBox(this.scene, -11, 1.5, 0, 0.2, 3, 16, "#f7f9fb");
+    this.addBox(this.scene, 11, 1.5, 0, 0.2, 3, 16, "#f7f9fb");
+
+    // Partisi antar area kerja
+    this.addBox(this.scene, 0, 0.55, 0, 0.12, 1.1, 13, "#cbd5df");
+  }
+
+  makeTextSprite(text, color = "#172536") {
     const canvas = document.createElement("canvas");
     canvas.width = 512;
     canvas.height = 128;
-    const ctx = canvas.getContext("2d");
-    ctx.fillStyle = "#20334b";
-    ctx.fillRect(0, 0, 512, 128);
-    ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 34px Arial";
-    ctx.textAlign = "center";
-    ctx.fillText(text.toUpperCase(), 256, 78);
+
+    const context = canvas.getContext("2d");
+    context.fillStyle = "rgba(255,255,255,0.94)";
+    context.beginPath();
+    context.roundRect(8, 8, 496, 112, 20);
+    context.fill();
+
+    context.font = "bold 34px Arial";
+    context.fillStyle = color;
+    context.textAlign = "center";
+    context.textBaseline = "middle";
+    context.fillText(text, 256, 64, 470);
 
     const texture = new THREE.CanvasTexture(canvas);
-    texture.colorSpace = THREE.SRGBColorSpace;
     const sprite = new THREE.Sprite(
-      new THREE.SpriteMaterial({ map: texture })
+      new THREE.SpriteMaterial({
+        map: texture,
+        transparent: true,
+        depthTest: false
+      })
     );
-    sprite.position.set(x, 2.5, z);
-    sprite.scale.set(3.3, 0.82, 1);
-    this.scene.add(sprite);
+
+    sprite.scale.set(2.5, 0.63, 1);
+    return sprite;
   }
 
-  buildRooms() {
-    // Dinding belakang dan sisi luar.
-    this.box(0, 1.65, -8.8, 22, 3.3, 0.2, "#d5e0e9");
-    this.box(-10.9, 1.65, 0, 0.2, 3.3, 18, "#d5e0e9");
-    this.box(10.9, 1.65, 0, 0.2, 3.3, 18, "#d5e0e9");
+  createRooms() {
+    const labels = [
+      ["CEO OFFICE", -7, -6],
+      ["RESEARCH", -2.5, -6],
+      ["PRODUCT", 2.5, -6],
+      ["QUALITY CONTROL", 7, -6],
+      ["CONTENT STUDIO", -7, 6],
+      ["SALES", -2.5, 6],
+      ["FINANCE", 2.5, 6],
+      ["MEETING ROOM", 7, 2.5]
+    ];
 
-    // Partisi kaca rendah antar departemen.
-    for (const x of [-4.8, 0, 4.8]) {
-      this.box(x, 0.95, -5.4, 0.07, 1.9, 5.8, "#9bb9ca");
-      this.box(x, 0.95, 4.6, 0.07, 1.9, 5.8, "#9bb9ca");
-    }
+    labels.forEach(([name, x, z]) => {
+      const label = this.makeTextSprite(name);
+      label.position.set(x, 2.3, z);
+      this.scene.add(label);
+    });
 
-    this.box(0, 0.95, 0, 21, 1.9, 0.07, "#9bb9ca");
-
-    this.roomLabel(-7, -7.8, "Executive");
-    this.roomLabel(-2.5, -7.8, "Research");
-    this.roomLabel(2.5, -7.8, "Product Studio");
-    this.roomLabel(7, -7.8, "Quality Lab");
-    this.roomLabel(-7, 7.6, "Marketing");
-    this.roomLabel(-2.5, 7.6, "Sales");
-    this.roomLabel(2.5, 7.6, "Finance");
-    this.roomLabel(6.5, 5.0, "Meeting Room");
-
-    // Jendela kaca dekoratif.
-    this.box(0, 2.2, -8.68, 8, 1.3, 0.025, "#91b7d0");
+    // Area meeting
+    this.addBox(this.scene, 7, 0.55, 2.5, 5.2, 0.12, 3.5, "#a9b8c7");
   }
 
-  buildDesk(agent) {
-    const [x, , z] = agent.desk;
+  createDesk(x, z) {
+    const group = new THREE.Group();
 
-    // Meja.
-    this.box(x, 0.85, z, 2.2, 0.16, 1.05, "#8a654d");
-    for (const dx of [-0.9, 0.9]) {
-      for (const dz of [-0.38, 0.38]) {
-        this.box(x + dx, 0.42, z + dz, 0.09, 0.82, 0.09, "#53677d");
-      }
-    }
+    this.addBox(group, 0, 0.85, 0, 2.2, 0.14, 1.1, "#8c684b");
 
-    // Laptop dan layar.
-    this.box(x, 1.05, z - 0.23, 0.75, 0.035, 0.5, "#26384c");
-    this.box(x, 1.32, z - 0.38, 0.72, 0.48, 0.045, "#283c52");
-    this.box(x, 1.32, z - 0.35, 0.61, 0.36, 0.018, "#6d9fbd");
+    [-0.9, 0.9].forEach((dx) => {
+      [-0.4, 0.4].forEach((dz) => {
+        this.addBox(group, dx, 0.4, dz, 0.12, 0.8, 0.12, "#495767");
+      });
+    });
 
-    // Keyboard.
-    this.box(x, 1.08, z + 0.13, 0.55, 0.025, 0.19, "#4c5c70");
+    // Laptop screen and keyboard
+    this.addBox(group, 0, 1.13, -0.15, 0.85, 0.06, 0.52, "#202b38");
+    this.addBox(group, 0, 1.37, -0.38, 0.85, 0.48, 0.05, "#263d55");
 
-    // Kursi dan kaki kursi.
-    this.cylinder(x, 0.12, z + 1.15, 0.28, 0.12, "#384e68");
-    this.box(x, 0.52, z + 1.4, 0.55, 0.12, 0.5, "#405a76");
-    this.box(x, 0.9, z + 1.62, 0.55, 0.72, 0.12, "#405a76");
-    this.cylinder(x, 0.28, z + 1.4, 0.07, 0.4, "#7c8fa3");
+    const screen = new THREE.Mesh(
+      new THREE.PlaneGeometry(0.73, 0.36),
+      new THREE.MeshBasicMaterial({ color: "#4ca6d9" })
+    );
+
+    screen.position.set(0, 1.38, -0.345);
+    group.add(screen);
+
+    group.position.set(x, 0, z);
+    this.scene.add(group);
+    return group;
   }
 
-  buildFurniture() {
-    for (const agent of AGENTS) this.buildDesk(agent);
+  createChair(x, z) {
+    const group = new THREE.Group();
 
-    // Meja rapat.
-    this.box(6.5, 0.82, 2.4, 4.2, 0.18, 2.4, "#765b48");
+    this.addBox(group, 0, 0.65, 0, 0.8, 0.12, 0.8, "#34495e");
+    this.addBox(group, 0, 1.15, -0.32, 0.8, 0.9, 0.12, "#34495e");
+    this.addBox(group, 0, 0.3, 0, 0.12, 0.55, 0.12, "#687888");
 
-    for (let i = 0; i < 6; i++) {
-      const angle = i * Math.PI / 3;
-      const x = 6.5 + Math.cos(angle) * 2.5;
-      const z = 2.4 + Math.sin(angle) * 1.8;
-      this.cylinder(x, 0.12, z, 0.28, 0.12, "#344b65");
-      this.box(x, 0.48, z, 0.5, 0.12, 0.5, "#526c87");
-      this.box(x, 0.82, z + 0.2, 0.5, 0.65, 0.1, "#526c87");
+    group.position.set(x, 0, z);
+    this.scene.add(group);
+  }
+
+  createFurniture() {
+    AGENTS.forEach((agent) => {
+      const [x, , z] = agent.start;
+      this.createDesk(x, z);
+      this.createChair(x, z + 1.25);
+    });
+
+    // Meja meeting besar
+    this.addBox(this.scene, 7, 0.8, 2.5, 3.5, 0.16, 1.8, "#8c684b");
+
+    // Kursi meeting
+    for (let i = 0; i < 3; i++) {
+      this.createChair(5.3 + i * 1.4, 0.5);
+      this.createChair(5.3 + i * 1.4, 4.4);
     }
 
-    // Papan presentasi.
-    this.box(9.5, 1.8, -0.1, 0.12, 2.1, 2.8, "#344b62");
-    this.box(9.42, 1.8, -0.1, 0.025, 1.85, 2.55, "#e8f0f4");
+    // Tanaman dekorasi
+    [-9.5, 9.5, -7, 7].forEach((x, index) => {
+      const pot = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.25, 0.3, 0.5, 12),
+        this.material("#8b654d")
+      );
 
-    // Tanaman hias.
-    for (const [x, z] of [[-9.5, -7.2], [9.5, 7.2], [-9.5, 7.2]]) {
-      this.cylinder(x, 0.35, z, 0.35, 0.65, "#a87853");
+      pot.position.set(x, 0.25, index < 2 ? -6.5 : 6.5);
+      this.scene.add(pot);
+
       const leaves = new THREE.Mesh(
-        new THREE.SphereGeometry(0.65, 12, 10),
-        this.mat("#4d9a77")
+        new THREE.SphereGeometry(0.55, 12, 12),
+        this.material("#39865a")
       );
-      leaves.position.set(x, 1.25, z);
-      leaves.scale.set(0.8, 1.25, 0.8);
-      this.scene.add(leaves);
-    }
 
-    // Lampu gantung.
-    for (const x of [-7, -2.5, 2.5, 7]) {
-      const lamp = new THREE.Mesh(
-        new THREE.SphereGeometry(0.13, 12, 8),
-        new THREE.MeshStandardMaterial({
-          color: "#ffe3a1",
-          emissive: "#dcae62",
-          emissiveIntensity: 0.7
-        })
-      );
-      lamp.position.set(x, 3.0, 0);
-      this.scene.add(lamp);
-    }
+      leaves.position.set(x, 0.9, index < 2 ? -6.5 : 6.5);
+      this.scene.add(leaves);
+    });
   }
 
   createCharacter(agent) {
     const group = new THREE.Group();
-    group.userData.agent = agent;
 
-    const skin = this.mat("#e4b99b");
-    const shirt = this.mat(agent.color);
-    const pants = this.mat("#34455e");
-    const shoes = this.mat("#202b3b");
+    const skin = this.material("#e5b995");
+    const clothes = this.material(agent.color || "#3978a8");
+    const dark = this.material("#243447");
 
-    const body = new THREE.Mesh(
-      new THREE.CapsuleGeometry(0.25, 0.48, 4, 8),
-      shirt
+    const torso = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.28, 0.48, 4, 8),
+      clothes
     );
-    body.position.y = 0.88;
-    body.castShadow = true;
-    group.add(body);
+    torso.position.y = 1.05;
+    torso.castShadow = true;
+    group.add(torso);
 
     const head = new THREE.Mesh(
-      new THREE.SphereGeometry(0.21, 18, 14),
+      new THREE.SphereGeometry(0.23, 16, 16),
       skin
     );
-    head.position.y = 1.55;
+    head.position.y = 1.72;
     head.castShadow = true;
     group.add(head);
 
-    // Rambut.
     const hair = new THREE.Mesh(
-      new THREE.SphereGeometry(0.215, 16, 10, 0, Math.PI * 2, 0, Math.PI * 0.52),
-      this.mat("#293344")
+      new THREE.SphereGeometry(0.235, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+      dark
     );
-    hair.position.y = 1.61;
+    hair.position.y = 1.8;
     group.add(hair);
 
-    const arms = [];
-    for (const side of [-1, 1]) {
-      const arm = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.075, 0.4, 4, 8),
-        shirt
-      );
-      arm.position.set(side * 0.31, 0.94, 0);
-      arm.rotation.z = side * -0.12;
-      arm.castShadow = true;
-      group.add(arm);
-      arms.push(arm);
-    }
+    const leftArm = new THREE.Group();
+    const rightArm = new THREE.Group();
+
+    const armGeometry = new THREE.CapsuleGeometry(0.09, 0.4, 3, 8);
+
+    const leftArmMesh = new THREE.Mesh(armGeometry, clothes);
+    leftArmMesh.position.y = -0.22;
+    leftArm.add(leftArmMesh);
+    leftArm.position.set(-0.34, 1.3, 0);
+
+    const rightArmMesh = new THREE.Mesh(armGeometry, clothes);
+    rightArmMesh.position.y = -0.22;
+    rightArm.add(rightArmMesh);
+    rightArm.position.set(0.34, 1.3, 0);
+
+    group.add(leftArm, rightArm);
 
     const legs = [];
-    for (const side of [-1, 1]) {
+
+    [-0.14, 0.14].forEach((x) => {
       const leg = new THREE.Group();
-      const legMesh = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.085, 0.38, 4, 8),
-        pants
-      );
-      legMesh.position.y = -0.25;
-      leg.add(legMesh);
 
-      const shoe = new THREE.Mesh(
-        new THREE.BoxGeometry(0.19, 0.12, 0.3),
-        shoes
+      const mesh = new THREE.Mesh(
+        new THREE.CapsuleGeometry(0.11, 0.38, 3, 8),
+        dark
       );
-      shoe.position.set(0, -0.49, 0.08);
-      leg.add(shoe);
 
-      leg.position.set(side * 0.13, 0.48, 0);
+      mesh.position.y = -0.25;
+      leg.add(mesh);
+      leg.position.set(x, 0.58, 0);
       group.add(leg);
       legs.push(leg);
-    }
+    });
 
-    const ring = new THREE.Mesh(
-      new THREE.TorusGeometry(0.48, 0.025, 8, 32),
-      new THREE.MeshBasicMaterial({ color: agent.color })
-    );
-    ring.rotation.x = Math.PI / 2;
-    ring.position.y = 0.04;
-    group.add(ring);
-
-    const label = makeLabel(agent);
+    const label = this.makeTextSprite(agent.name, "#142b40");
+    label.position.set(0, 2.35, 0);
     group.add(label);
 
-    group.userData.arms = arms;
-    group.userData.legs = legs;
-    group.userData.body = body;
-    group.userData.ring = ring;
-    group.userData.label = label;
-    group.userData.phase = Math.random() * 5;
-    group.userData.target = new THREE.Vector3(...agent.start);
-    group.userData.destination = "work";
+    const activityLabel = this.makeTextSprite("Menunggu perintah", "#28618b");
+    activityLabel.position.set(0, 2.78, 0);
+    activityLabel.scale.set(2.8, 0.48, 1);
+    group.add(activityLabel);
+
+    const character = {
+      group,
+      agent,
+      leftArm,
+      rightArm,
+      legs,
+      label,
+      activityLabel,
+      userData: {
+        target: new THREE.Vector3(...agent.start),
+        status: "Idle",
+        activity: "Menunggu perintah",
+        currentTask: ""
+      }
+    };
 
     group.position.set(...agent.start);
     this.scene.add(group);
-    this.characters.push(group);
+
+    this.characters.push(character);
+    return character;
   }
 
-  buildCharacters() {
-    for (const agent of AGENTS) this.createCharacter(agent);
+  createCharacters() {
+    AGENTS.forEach((agent) => this.createCharacter(agent));
   }
 
-  setAgentActivity(agentId, status, activity, destination = "work") {
-    const character = this.characters.find(
-      item => item.userData.agent.id === agentId
+  getMeetingTarget(index) {
+    return new THREE.Vector3(
+      5 + (index % 3),
+      0,
+      1 + Math.floor(index / 3)
     );
+  }
+
+  setAgentActivity(
+    agentId,
+    status,
+    activity,
+    destination = "work"
+  ) {
+    const character = this.characters.find(
+      (item) => item.agent.id === agentId
+    );
+
     if (!character) return;
 
-    const agent = character.userData.agent;
+    const index = this.characters.indexOf(character);
+
+    // Poin 10: target berdasarkan destination, bukan hanya status
     const target = destination === "meeting"
-      ? new THREE.Vector3(
-          MEETING_POSITION[0] + (this.characters.indexOf(character) % 3 - 1) * 0.9,
-          0,
-          MEETING_POSITION[2] + Math.floor(this.characters.indexOf(character) / 3) * 0.8
-        )
-      : destination === "ceo"
-        ? new THREE.Vector3(-5.4, 0, -2.3)
-        : new THREE.Vector3(...agent.start);
+      ? this.getMeetingTarget(index)
+      : new THREE.Vector3(...character.agent.start);
 
     character.userData.target.copy(target);
-    character.userData.destination = destination;
     character.userData.status = status;
     character.userData.activity = activity;
+
+    this.updateCharacterLabel(character);
   }
 
-  
-sendToMeeting() {
-  this.isMeeting = true;
+  updateCharacterLabel(character) {
+    const { status, activity } = character.userData;
 
-  this.characters.forEach((character, index) => {
-    const col = index % 3;
-    const row = Math.floor(index / 3);
+    const text = `${status}: ${activity}`;
+    character.group.remove(character.activityLabel);
 
-    const target = new THREE.Vector3(
-      5.0 + col * 1.0,
-      0,
-      1.0 + row * 1.0
+    character.activityLabel = this.makeTextSprite(
+      text,
+      status === "Working" ? "#247a4b" : "#28618b"
     );
 
-    character.userData.target.copy(target);
-    character.userData.status = "Meeting";
-    character.userData.activity = "Mengikuti meeting";
-  });
-}
+    character.activityLabel.position.set(0, 2.78, 0);
+    character.activityLabel.scale.set(2.8, 0.48, 1);
+    character.group.add(character.activityLabel);
+  }
 
+  sendToMeeting() {
+    this.isMeeting = true;
+
+    // Poin 10: semua agent mendapat posisi meeting berbeda
+    this.characters.forEach((character, index) => {
+      const target = this.getMeetingTarget(index);
+
+      character.userData.target.copy(target);
+      character.userData.status = "Meeting";
+      character.userData.activity = "Mengikuti meeting";
+
+      this.updateCharacterLabel(character);
+    });
+  }
 
   returnToWork() {
     this.isMeeting = false;
-    for (const character of this.characters) {
-      const state = getAgentState(character.userData.agent.id);
-      this.setAgentActivity(
-        character.userData.agent.id,
-        state.status,
-        state.activity,
-        "work"
-      );
-    }
+
+    this.characters.forEach((character) => {
+      character.userData.target.set(...character.agent.start);
+      character.userData.status = "Walking";
+      character.userData.activity = "Kembali ke meja kerja";
+
+      this.updateCharacterLabel(character);
+    });
   }
 
   updateCharacters(delta, elapsed) {
-    for (const character of this.characters) {
-      const data = character.userData;
-      const state = getAgentState(data.agent.id);
+    this.characters.forEach((character) => {
+      const state = getAgentState(character.agent.id);
 
-      // Sinkronisasi label dengan status Company Core.
-      if (state.status !== data.status || state.activity !== data.activity) {
-        data.status = state.status;
-        data.activity = state.activity;
+      const index = this.characters.indexOf(character);
 
-        const target = state.status === "Meeting"
-          ? new THREE.Vector3(...MEETING_POSITION)
-          : new THREE.Vector3(...data.agent.start);
+      // Poin 12: posisi meeting individual, tidak bertumpuk
+      const target = state.status === "Meeting"
+        ? this.getMeetingTarget(index)
+        : new THREE.Vector3(...character.agent.start);
 
-        data.target.copy(target);
+      if (
+        state.status === "Meeting" ||
+        state.status === "Walking" ||
+        state.status === "Working" ||
+        state.status === "Idle"
+      ) {
+        character.userData.target.copy(target);
       }
 
-      const direction = new THREE.Vector3().subVectors(
-        data.target,
-        character.position
-      );
+      const position = character.group.position;
+      const distance = position.distanceTo(character.userData.target);
 
-      const distance = direction.length();
-      const walking = distance > 0.12;
+      if (distance > 0.08) {
+        const direction = character.userData.target.clone().sub(position).normalize();
+        const speed = 2.2 * delta;
 
-      if (walking) {
-        direction.normalize();
-        const step = Math.min(distance, delta * 2.5);
-        character.position.addScaledVector(direction, step);
-        character.rotation.y = Math.atan2(direction.x, direction.z);
-      }
+        position.add(direction.multiplyScalar(Math.min(speed, distance)));
 
-      const t = elapsed + data.phase;
+        character.group.rotation.y = Math.atan2(
+          direction.x,
+          direction.z
+        );
 
-      if (walking) {
-        data.legs[0].rotation.x = Math.sin(t * 9) * 0.55;
-        data.legs[1].rotation.x = -Math.sin(t * 9) * 0.55;
-        data.arms[0].rotation.x = -Math.sin(t * 9) * 0.35;
-        data.arms[1].rotation.x = Math.sin(t * 9) * 0.35;
-        data.body.position.y = 0.88 + Math.abs(Math.sin(t * 9)) * 0.035;
+        const swing = Math.sin(elapsed * 10) * 0.45;
+        character.legs[0].rotation.x = swing;
+        character.legs[1].rotation.x = -swing;
+        character.leftArm.rotation.x = -swing * 0.7;
+        character.rightArm.rotation.x = swing * 0.7;
       } else {
-        data.legs[0].rotation.x = 0;
-        data.legs[1].rotation.x = 0;
+        character.legs.forEach((leg) => {
+          leg.rotation.x *= 0.8;
+        });
 
-        if (data.status === "Working") {
-          data.arms[0].rotation.x = Math.sin(t * 5) * 0.18;
-          data.arms[1].rotation.x = Math.cos(t * 5) * 0.18;
-          data.body.position.y = 0.88;
-        } else {
-          data.arms[0].rotation.x = 0;
-          data.arms[1].rotation.x = 0;
-          data.body.position.y = 0.88 + Math.sin(t * 1.8) * 0.018;
-        }
+        const working = state.status === "Working";
+
+        character.leftArm.rotation.x = working
+          ? Math.sin(elapsed * 8) * 0.18
+          : 0;
+
+        character.rightArm.rotation.x = working
+          ? Math.cos(elapsed * 8) * 0.18
+          : 0;
       }
 
-      const color = data.status === "Working"
-        ? "#35c995"
-        : data.status === "Walking"
-          ? "#62b6ff"
-          : data.status === "Meeting"
-            ? "#efb45e"
-            : "#9aa9bb";
-
-      data.ring.material.color.set(color);
-      data.ring.rotation.z += delta * 0.4;
-
-      updateLabel(data.label, data.agent, walking
-        ? "Berjalan ke lokasi"
-        : data.activity || "Menunggu pekerjaan");
-    }
+      // Sinkronisasi status dan label dengan data perusahaan
+      if (
+        character.userData.status !== state.status ||
+        character.userData.activity !== state.activity
+      ) {
+        character.userData.status = state.status;
+        character.userData.activity = state.activity;
+        character.userData.currentTask = state.currentTask || "";
+        this.updateCharacterLabel(character);
+      }
+    });
   }
 
-  bindCamera() {
-    const canvas = this.renderer.domElement;
+  bindControls() {
+    let dragging = false;
+    let previousX = 0;
+    let previousY = 0;
 
-    canvas.addEventListener("pointerdown", event => {
-      this.drag.active = true;
-      this.drag.moved = false;
-      this.drag.x = event.clientX;
-      this.drag.y = event.clientY;
-      canvas.setPointerCapture(event.pointerId);
+    this.renderer.domElement.addEventListener("pointerdown", (event) => {
+      dragging = true;
+      previousX = event.clientX;
+      previousY = event.clientY;
+      this.renderer.domElement.setPointerCapture(event.pointerId);
     });
 
-    canvas.addEventListener("pointermove", event => {
-      if (!this.drag.active) return;
-
-      const dx = event.clientX - this.drag.x;
-      const dy = event.clientY - this.drag.y;
-
-      if (Math.abs(dx) + Math.abs(dy) > 3) this.drag.moved = true;
-
-      this.drag.x = event.clientX;
-      this.drag.y = event.clientY;
-      this.drag.theta -= dx * 0.006;
-      this.drag.phi = clamp(this.drag.phi + dy * 0.004, 0.25, 1.35);
-
-      this.updateCamera();
+    this.renderer.domElement.addEventListener("pointerup", () => {
+      dragging = false;
     });
 
-    canvas.addEventListener("pointerup", event => {
-      this.drag.active = false;
-      if (!this.drag.moved) this.selectAgent(event);
+    this.renderer.domElement.addEventListener("pointermove", (event) => {
+      if (!dragging) return;
+
+      const dx = event.clientX - previousX;
+      const dy = event.clientY - previousY;
+
+      previousX = event.clientX;
+      previousY = event.clientY;
+
+      this.camera.position.x -= dx * 0.025;
+      this.camera.position.z -= dy * 0.025;
+      this.camera.lookAt(0, 0, 0);
     });
 
-    canvas.addEventListener("wheel", event => {
-      this.drag.radius = clamp(
-        this.drag.radius + event.deltaY * 0.018,
-        16,
-        42
-      );
-      this.updateCamera();
+    this.renderer.domElement.addEventListener("wheel", (event) => {
+      const factor = event.deltaY > 0 ? 1.08 : 0.92;
+      this.camera.position.multiplyScalar(factor);
+      this.camera.lookAt(0, 0, 0);
     }, { passive: true });
-
-    this.updateCamera();
-  }
-
-  updateCamera() {
-    const { theta, phi, radius } = this.drag;
-    this.camera.position.set(
-      this.target.x + radius * Math.sin(phi) * Math.sin(theta),
-      this.target.y + radius * Math.cos(phi),
-      this.target.z + radius * Math.sin(phi) * Math.cos(theta)
-    );
-    this.camera.lookAt(this.target);
-  }
-
-  selectAgent(event) {
-    const rect = this.renderer.domElement.getBoundingClientRect();
-    this.pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
-    this.pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
-
-    this.raycaster.setFromCamera(this.pointer, this.camera);
-    const objects = this.characters.flatMap(c => c.children);
-    const hits = this.raycaster.intersectObjects(objects, true);
-
-    if (!hits.length) return;
-
-    let current = hits[0].object;
-    while (current && !current.userData.agent) current = current.parent;
-
-    if (current?.userData.agent) {
-      this.onSelect?.(current.userData.agent);
-    }
-  }
-
-  resetCamera() {
-    this.drag.theta = Math.PI / 4;
-    this.drag.phi = 0.9;
-    this.drag.radius = 30;
-    this.target.set(0, 0, 0);
-    this.updateCamera();
-  }
-
-  resize() {
-    const width = this.container.clientWidth || 1;
-    const height = this.container.clientHeight || 1;
-    this.camera.aspect = width / height;
-    this.camera.updateProjectionMatrix();
-    this.renderer.setSize(width, height);
   }
 
   animate() {
-    this.frame = requestAnimationFrame(() => this.animate());
     const delta = Math.min(this.clock.getDelta(), 0.05);
-    this.updateCharacters(delta, this.clock.elapsedTime);
+    const elapsed = this.clock.elapsedTime;
+
+    this.updateCharacters(delta, elapsed);
     this.renderer.render(this.scene, this.camera);
   }
 
+  resize() {
+    if (!this.container) return;
+
+    const width = this.container.clientWidth;
+    const height = this.container.clientHeight;
+
+    if (!width || !height) return;
+
+    this.camera.aspect = width / height;
+    this.camera.updateProjectionMatrix();
+
+    this.renderer.setSize(width, height);
+  }
+
+  resetCamera() {
+    this.camera.position.set(15, 15, 19);
+    this.camera.lookAt(0, 0, 0);
+  }
+
   destroy() {
-    cancelAnimationFrame(this.frame);
-    this.observer?.disconnect();
+    this.renderer.setAnimationLoop(null);
+    window.removeEventListener("resize", this.resizeHandler);
     this.renderer.dispose();
-    this.renderer.domElement.remove();
+    this.container.innerHTML = "";
   }
 }
