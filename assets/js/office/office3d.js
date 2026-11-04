@@ -424,17 +424,26 @@ export class VirtualOffice {
     character.userData.activity = activity;
   }
 
-  sendToMeeting() {
-    this.isMeeting = true;
-    for (const character of this.characters) {
-      this.setAgentActivity(
-        character.userData.agent.id,
-        "Meeting",
-        "Mengikuti meeting",
-        "meeting"
-      );
-    }
-  }
+  
+sendToMeeting() {
+  this.isMeeting = true;
+
+  this.characters.forEach((character, index) => {
+    const col = index % 3;
+    const row = Math.floor(index / 3);
+
+    const target = new THREE.Vector3(
+      5.0 + col * 1.0,
+      0,
+      1.0 + row * 1.0
+    );
+
+    character.userData.target.copy(target);
+    character.userData.status = "Meeting";
+    character.userData.activity = "Mengikuti meeting";
+  });
+}
+
 
   returnToWork() {
     this.isMeeting = false;
