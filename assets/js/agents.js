@@ -6,10 +6,12 @@ export const AGENTS = [
     role: "Chief Executive Officer",
     department: "Management",
     icon: "👔",
-    color: "#e6b45c",
-    description: "Mengatur arah perusahaan, strategi, dan pembagian pekerjaan.",
-    responsibility: "Business planning and task delegation",
-    position: [-6, 0, -3]
+    color: "#d9ae65",
+    description: "Memimpin perusahaan, menentukan strategi, dan membagikan pekerjaan.",
+    room: "Executive Office",
+    desk: [-7, 0, -5],
+    start: [-7, 0, -3.5],
+    work: [-7, 0, -4.1]
   },
   {
     id: "research",
@@ -18,9 +20,11 @@ export const AGENTS = [
     department: "Research",
     icon: "🔍",
     color: "#63a7ed",
-    description: "Menganalisis kebutuhan pasar, masalah pelanggan, dan peluang bisnis.",
-    responsibility: "Market research and competitor analysis",
-    position: [-2, 0, -3]
+    description: "Menganalisis masalah pelanggan, kebutuhan pasar, dan peluang bisnis.",
+    room: "Research Room",
+    desk: [-2.5, 0, -5],
+    start: [-2.5, 0, -3.5],
+    work: [-2.5, 0, -4.1]
   },
   {
     id: "product",
@@ -29,9 +33,11 @@ export const AGENTS = [
     department: "Product",
     icon: "💡",
     color: "#a78bfa",
-    description: "Menyusun ide dan membuat konsep produk digital.",
-    responsibility: "Product planning and development",
-    position: [2, 0, -3]
+    description: "Membuat konsep, struktur, dan rancangan produk digital.",
+    room: "Product Studio",
+    desk: [2.5, 0, -5],
+    start: [2.5, 0, -3.5],
+    work: [2.5, 0, -4.1]
   },
   {
     id: "qa",
@@ -40,9 +46,11 @@ export const AGENTS = [
     department: "Quality",
     icon: "🛡️",
     color: "#55c7a1",
-    description: "Memeriksa kualitas, kelengkapan, dan manfaat produk.",
-    responsibility: "Product quality control",
-    position: [6, 0, -3]
+    description: "Memeriksa kualitas, kelengkapan, dan kemudahan penggunaan produk.",
+    room: "Quality Lab",
+    desk: [7, 0, -5],
+    start: [7, 0, -3.5],
+    work: [7, 0, -4.1]
   },
   {
     id: "content",
@@ -52,8 +60,10 @@ export const AGENTS = [
     icon: "✍️",
     color: "#ee8ca5",
     description: "Membuat konten edukatif dan organik untuk Threads.",
-    responsibility: "Organic content creation",
-    position: [-4, 0, 3]
+    room: "Marketing Studio",
+    desk: [-7, 0, 5],
+    start: [-7, 0, 3.5],
+    work: [-7, 0, 4.1]
   },
   {
     id: "sales",
@@ -62,9 +72,11 @@ export const AGENTS = [
     department: "Sales",
     icon: "🤝",
     color: "#e9a45f",
-    description: "Membantu proses penjualan dan memahami kebutuhan pelanggan.",
-    responsibility: "Customer support and sales analysis",
-    position: [0, 0, 3]
+    description: "Menganalisis calon pelanggan dan pengalaman pembelian.",
+    room: "Sales Room",
+    desk: [-2.5, 0, 5],
+    start: [-2.5, 0, 3.5],
+    work: [-2.5, 0, 4.1]
   },
   {
     id: "finance",
@@ -73,8 +85,12 @@ export const AGENTS = [
     department: "Finance",
     icon: "📊",
     color: "#69b8c9",
-    description: "Mencatat transaksi, biaya, pendapatan, dan evaluasi keuangan.",
-    responsibility: "Financial planning and reporting",
-    position: [4, 0, 3]
+    description: "Mengelola perencanaan, pendapatan, biaya, dan laporan keuangan.",
+    room: "Finance Room",
+    desk: [2.5, 0, 5],
+    start: [2.5, 0, 3.5],
+    work: [2.5, 0, 4.1]
   }
 ];
+
+export const MEETING_POSITION = [6.5, 0, 2.5];
