@@ -1,15 +1,64 @@
 
-import { AGENTS } from "./agents.js";
+import { CONFIG } from "./config.js";
 import { getOrCreateData, saveData } from "./storage.js";
+import { AGENTS } from "./agents.js";
 
 export const companyData = getOrCreateData();
 
+// Normalisasi data LocalStorage versi lama
+companyData.company ||= CONFIG.COMPANY || {
+  name: "Mitsal Digital Company",
+  owner: "Owner",
+  mission: "Membangun dan menjual produk digital."
+};
+
+companyData.tasks ||= [];
+companyData.products ||= [];
+companyData.contents ||= [];
+companyData.sales ||= [];
+companyData.activities ||= [];
+companyData.agentStates ||= {};
+
+companyData.finance ||= {
+  revenue: 0,
+  expenses: 0
+};
+
+companyData.strategy ||= {
+  market: "Belum ditentukan",
+  plan: "Belum ada strategi.",
+  target: 0
+};
+
+companyData.businessSimulation ||= {
+  phase: "Belum dimulai",
+  progress: 0,
+  currentRun: null,
+  lastReport: null
+};
+
+// Pastikan struktur data lama lengkap
+companyData.finance.revenue ??= 0;
+companyData.finance.expenses ??= 0;
+
+companyData.businessSimulation.phase ||= "Belum dimulai";
+companyData.businessSimulation.progress ??= 0;
+companyData.businessSimulation.currentRun ??= null;
+companyData.businessSimulation.lastReport ??= null;
+
+AGENTS.forEach((agent) => {
+  companyData.agentStates[agent.id] ||= {
+    status: "Idle",
+    activity: "Menunggu perintah",
+    currentTask: "",
+    progress: 0
+  };
+});
+
+saveData(companyData);
+
 function persist() {
   saveData(companyData);
-}
-
-function id(prefix) {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function getCompanyData() {
@@ -17,180 +66,199 @@ export function getCompanyData() {
 }
 
 export function getAgent(agentId) {
-  return AGENTS.find(agent => agent.id === agentId);
+  return AGENTS.find((agent) => agent.id === agentId);
 }
 
 export function getAgentState(agentId) {
-  if (!companyData.agentStates[agentId]) {
-    companyData.agentStates[agentId] = {
-      status: "Idle",
-      activity: "Menunggu pekerjaan",
-      currentTask: "",
-      result: ""
-    };
-    persist();
-  }
+  return companyData.agentStates[agentId] || {
+    status: "Idle",
+    activity: "Menunggu perintah",
+    currentTask: "",
+    progress: 0
+  };
+}
+
+export function setAgentState(agentId, updates = {}) {
+  const previous = getAgentState(agentId);
+
+  companyData.agentStates[agentId] = {
+    ...previous,
+    ...updates,
+    updatedAt: new Date().toISOString()
+  };
+
+  persist();
   return companyData.agentStates[agentId];
 }
 
-export function setAgentState(agentId, changes) {
-  const previous = getAgentState(agentId);
-  companyData.agentStates[agentId] = { ...previous, ...changes };
+export function initializeAgentStates() {
+  AGENTS.forEach((agent) => {
+    companyData.agentStates[agent.id] ||= {
+      status: "Idle",
+      activity: "Menunggu perintah",
+      currentTask: "",
+      progress: 0
+    };
+  });
+
   persist();
 }
 
-export function addActivity(message, type = "info") {
-  companyData.activities.unshift({
-    id: id("activity"),
+export function addActivity(message, agentId = "system", type = "info") {
+  const activity = {
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    agentId,
     message,
     type,
-    date: new Date().toISOString()
-  });
+    createdAt: new Date().toISOString()
+  };
 
+  companyData.activities.unshift(activity);
   companyData.activities = companyData.activities.slice(0, 150);
+
   persist();
+  return activity;
 }
 
 export function createTask({
-  agentId,
   title,
-  description,
-  source = "CEO",
-  stage = "execution"
+  description = "",
+  agentId = "ceo",
+  priority = "Normal"
 }) {
-  const agent = getAgent(agentId);
-  if (!agent) throw new Error("Agent tidak ditemukan.");
-
   const task = {
-    id: id("task"),
-    agentId,
-    agentName: agent.name,
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
     title,
     description,
-    source,
-    stage,
+    agentId,
+    priority,
     status: "Pending",
-    result: null,
+    progress: 0,
+    result: "",
     createdAt: new Date().toISOString(),
     completedAt: null
   };
 
   companyData.tasks.unshift(task);
   persist();
-  addActivity(`${agent.name} menerima tugas: ${title}`, "task");
+
+  addActivity(`Tugas baru dibuat: ${title}`, agentId, "task");
   return task;
 }
 
-export function updateTask(taskId, changes) {
-  const task = companyData.tasks.find(item => item.id === taskId);
-  if (!task) throw new Error("Task tidak ditemukan.");
+export function updateTask(taskId, updates = {}) {
+  const task = companyData.tasks.find((item) => item.id === taskId);
+  if (!task) return null;
 
-  Object.assign(task, changes);
+  Object.assign(task, updates);
+
+  if (updates.status === "Completed") {
+    task.progress = 100;
+    task.completedAt = new Date().toISOString();
+  }
+
   persist();
   return task;
 }
 
 export function addProduct(product) {
   const item = {
-    id: id("product"),
-    name: product.name,
-    description: product.description,
-    price: Number(product.price || 0),
-    lynkUrl: product.lynkUrl || "",
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    name: product.name || "Produk baru",
+    description: product.description || "",
+    price: Number(product.price) || 0,
+    url: product.url || "",
     status: product.status || "Draft",
     createdAt: new Date().toISOString()
   };
 
   companyData.products.unshift(item);
   persist();
-  addActivity(`Produk ditambahkan: ${item.name}`, "product");
+
+  addActivity(`Produk dibuat: ${item.name}`, "product", "product");
   return item;
 }
 
 export function addContent(content) {
   const item = {
-    id: id("content"),
-    title: content.title,
-    body: content.body,
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    title: content.title || "Konten baru",
+    body: content.body || "",
+    platform: content.platform || "Threads",
     status: "Pending Approval",
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    approvedAt: null
   };
 
   companyData.contents.unshift(item);
   persist();
-  addActivity(`Konten menunggu persetujuan: ${item.title}`, "content");
+
+  addActivity(`Draft konten dibuat: ${item.title}`, "content", "content");
   return item;
 }
 
 export function approveContent(contentId) {
-  const item = companyData.contents.find(x => x.id === contentId);
-  if (!item) throw new Error("Konten tidak ditemukan.");
+  const item = companyData.contents.find((content) => content.id === contentId);
+  if (!item) return null;
 
   item.status = "Approved";
+  item.approvedAt = new Date().toISOString();
+
   persist();
-  addActivity(`Owner menyetujui konten: ${item.title}`);
+  addActivity(`Konten disetujui: ${item.title}`, "owner", "approval");
+
   return item;
 }
 
 export function rejectContent(contentId) {
-  const item = companyData.contents.find(x => x.id === contentId);
-  if (!item) throw new Error("Konten tidak ditemukan.");
+  const item = companyData.contents.find((content) => content.id === contentId);
+  if (!item) return null;
 
   item.status = "Rejected";
   persist();
-  addActivity(`Owner menolak konten: ${item.title}`);
+
+  addActivity(`Konten ditolak: ${item.title}`, "owner", "approval");
   return item;
 }
 
-export function updateStrategy(strategy) {
+export function updateStrategy(strategy = {}) {
   companyData.strategy = {
-    market: strategy.market,
-    plan: strategy.plan,
-    target: Number(strategy.target || 0)
+    ...companyData.strategy,
+    ...strategy
   };
 
   persist();
-  addActivity("Strategi bisnis diperbarui.");
+  return companyData.strategy;
 }
 
-export function addSale(productName, amount) {
-  const value = Number(amount);
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error("Nominal penjualan tidak valid.");
-  }
-
+export function addSale({
+  productId,
+  amount,
+  note = ""
+}) {
   const sale = {
-    id: id("sale"),
-    productName,
-    amount: value,
-    date: new Date().toISOString(),
-    source: "manual"
+    id: crypto.randomUUID?.() || `${Date.now()}-${Math.random()}`,
+    productId,
+    amount: Number(amount) || 0,
+    note,
+    createdAt: new Date().toISOString()
   };
 
   companyData.sales.unshift(sale);
-  companyData.finance.revenue += value;
+  companyData.finance.revenue += sale.amount;
+
   persist();
-  addActivity(`Penjualan dicatat: ${productName} — Rp${value.toLocaleString("id-ID")}`);
+  addActivity(`Penjualan manual dicatat: Rp${sale.amount.toLocaleString("id-ID")}`, "sales", "sale");
+
   return sale;
 }
 
-export function setBusinessSimulation(changes) {
+export function setBusinessSimulation(updates = {}) {
   companyData.businessSimulation = {
-    ...(companyData.businessSimulation || {
-      phase: "Belum dimulai",
-      progress: 0,
-      currentRun: null,
-      lastReport: null
-    }),
-    ...changes
+    ...companyData.businessSimulation,
+    ...updates
   };
+
   persist();
+  return companyData.businessSimulation;
 }
-
-export function initializeAgentStates() {
-  for (const agent of AGENTS) {
-    getAgentState(agent.id);
-  }
-}
-
-initializeAgentStates();
