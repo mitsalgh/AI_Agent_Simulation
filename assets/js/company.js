@@ -8,19 +8,8 @@ function persist() {
   saveData(companyData);
 }
 
-function makeId(prefix = "item") {
-  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-}
-
-export function addActivity(message) {
-  companyData.activities.unshift({
-    id: makeId("activity"),
-    message,
-    date: new Date().toISOString()
-  });
-
-  companyData.activities = companyData.activities.slice(0, 100);
-  persist();
+function id(prefix) {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
 export function getCompanyData() {
@@ -32,175 +21,104 @@ export function getAgent(agentId) {
 }
 
 export function getAgentState(agentId) {
-  return companyData.agentStates[agentId] || {
-    status: "Idle",
-    currentTask: "Menunggu pekerjaan"
-  };
+  if (!companyData.agentStates[agentId]) {
+    companyData.agentStates[agentId] = {
+      status: "Idle",
+      activity: "Menunggu pekerjaan",
+      currentTask: "",
+      result: ""
+    };
+    persist();
+  }
+  return companyData.agentStates[agentId];
+}
+
+export function setAgentState(agentId, changes) {
+  const previous = getAgentState(agentId);
+  companyData.agentStates[agentId] = { ...previous, ...changes };
+  persist();
+}
+
+export function addActivity(message, type = "info") {
+  companyData.activities.unshift({
+    id: id("activity"),
+    message,
+    type,
+    date: new Date().toISOString()
+  });
+
+  companyData.activities = companyData.activities.slice(0, 150);
+  persist();
 }
 
 export function createTask({
   agentId,
   title,
   description,
-  source = "owner"
+  source = "CEO",
+  stage = "execution"
 }) {
   const agent = getAgent(agentId);
   if (!agent) throw new Error("Agent tidak ditemukan.");
 
   const task = {
-    id: makeId("task"),
+    id: id("task"),
     agentId,
     agentName: agent.name,
     title,
     description,
     source,
+    stage,
     status: "Pending",
-    result: "",
+    result: null,
     createdAt: new Date().toISOString(),
     completedAt: null
   };
 
   companyData.tasks.unshift(task);
   persist();
-  addActivity(`${agent.name} menerima pekerjaan: ${title}`);
-
+  addActivity(`${agent.name} menerima tugas: ${title}`, "task");
   return task;
 }
 
-export function assignTask(agentId, title, description) {
-  return createTask({ agentId, title, description });
-}
-
-export function setAgentStatus(agentId, status, currentTask = "") {
-  companyData.agentStates[agentId] = {
-    status,
-    currentTask: currentTask || "Menunggu pekerjaan"
-  };
-  persist();
-}
-
-export function startTask(taskId) {
+export function updateTask(taskId, changes) {
   const task = companyData.tasks.find(item => item.id === taskId);
   if (!task) throw new Error("Task tidak ditemukan.");
 
-  task.status = "Working";
-  setAgentStatus(task.agentId, "Working", task.title);
+  Object.assign(task, changes);
   persist();
-  addActivity(`${task.agentName} mulai mengerjakan: ${task.title}`);
-
   return task;
-}
-
-export function completeTask(taskId, result) {
-  const task = companyData.tasks.find(item => item.id === taskId);
-  if (!task) throw new Error("Task tidak ditemukan.");
-
-  task.status = "Completed";
-  task.result = result || "Pekerjaan selesai.";
-  task.completedAt = new Date().toISOString();
-
-  const hasOtherWork = companyData.tasks.some(item =>
-    item.agentId === task.agentId &&
-    item.id !== taskId &&
-    ["Pending", "Working"].includes(item.status)
-  );
-
-  if (!hasOtherWork) {
-    setAgentStatus(task.agentId, "Idle", "Menunggu pekerjaan");
-  }
-
-  persist();
-  addActivity(`${task.agentName} menyelesaikan: ${task.title}`);
-
-  return task;
-}
-
-export function failTask(taskId, errorMessage) {
-  const task = companyData.tasks.find(item => item.id === taskId);
-  if (!task) return null;
-
-  task.status = "Failed";
-  task.result = errorMessage || "Pekerjaan gagal.";
-  task.completedAt = new Date().toISOString();
-
-  setAgentStatus(task.agentId, "Idle", "Menunggu pekerjaan");
-  persist();
-  addActivity(`${task.agentName} gagal menyelesaikan: ${task.title}`);
-
-  return task;
-}
-
-export function submitOwnerCommand(command) {
-  const text = String(command || "").trim();
-  if (!text) throw new Error("Perintah tidak boleh kosong.");
-
-  const jobs = [
-    {
-      agentId: "ceo",
-      title: "Analisis dan koordinasi perintah Owner",
-      description: text
-    },
-    {
-      agentId: "research",
-      title: "Riset pasar berdasarkan perintah Owner",
-      description: text
-    },
-    {
-      agentId: "product",
-      title: "Identifikasi peluang produk digital",
-      description: text
-    },
-    {
-      agentId: "content",
-      title: "Rencana konten pemasaran organik",
-      description: text
-    },
-    {
-      agentId: "finance",
-      title: "Analisis kelayakan finansial",
-      description: text
-    }
-  ];
-
-  const tasks = jobs.map(job => createTask({
-    ...job,
-    source: "owner-command"
-  }));
-
-  addActivity("Owner memberikan perintah baru kepada perusahaan.");
-  return tasks;
 }
 
 export function addProduct(product) {
   const item = {
-    id: makeId("product"),
-    name: product.name.trim(),
-    description: product.description.trim(),
-    price: Number(product.price),
+    id: id("product"),
+    name: product.name,
+    description: product.description,
+    price: Number(product.price || 0),
     lynkUrl: product.lynkUrl || "",
-    status: "Draft",
+    status: product.status || "Draft",
     createdAt: new Date().toISOString()
   };
 
   companyData.products.unshift(item);
   persist();
-  addActivity(`Produk baru ditambahkan: ${item.name}`);
+  addActivity(`Produk ditambahkan: ${item.name}`, "product");
   return item;
 }
 
 export function addContent(content) {
   const item = {
-    id: makeId("content"),
-    title: content.title.trim(),
-    body: content.body.trim(),
+    id: id("content"),
+    title: content.title,
+    body: content.body,
     status: "Pending Approval",
-    createdAt: new Date().toISOString(),
-    publishedAt: null
+    createdAt: new Date().toISOString()
   };
 
   companyData.contents.unshift(item);
   persist();
-  addActivity(`Konten baru menunggu persetujuan: ${item.title}`);
+  addActivity(`Konten menunggu persetujuan: ${item.title}`, "content");
   return item;
 }
 
@@ -210,7 +128,7 @@ export function approveContent(contentId) {
 
   item.status = "Approved";
   persist();
-  addActivity(`Konten disetujui Owner: ${item.title}`);
+  addActivity(`Owner menyetujui konten: ${item.title}`);
   return item;
 }
 
@@ -220,7 +138,7 @@ export function rejectContent(contentId) {
 
   item.status = "Rejected";
   persist();
-  addActivity(`Konten ditolak Owner: ${item.title}`);
+  addActivity(`Owner menolak konten: ${item.title}`);
   return item;
 }
 
@@ -242,16 +160,37 @@ export function addSale(productName, amount) {
   }
 
   const sale = {
-    id: makeId("sale"),
+    id: id("sale"),
     productName,
     amount: value,
-    date: new Date().toISOString()
+    date: new Date().toISOString(),
+    source: "manual"
   };
 
   companyData.sales.unshift(sale);
   companyData.finance.revenue += value;
   persist();
   addActivity(`Penjualan dicatat: ${productName} — Rp${value.toLocaleString("id-ID")}`);
-
   return sale;
 }
+
+export function setBusinessSimulation(changes) {
+  companyData.businessSimulation = {
+    ...(companyData.businessSimulation || {
+      phase: "Belum dimulai",
+      progress: 0,
+      currentRun: null,
+      lastReport: null
+    }),
+    ...changes
+  };
+  persist();
+}
+
+export function initializeAgentStates() {
+  for (const agent of AGENTS) {
+    getAgentState(agent.id);
+  }
+}
+
+initializeAgentStates();
