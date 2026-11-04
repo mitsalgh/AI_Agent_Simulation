@@ -1,6 +1,6 @@
 
-import { CONFIG, getEngineSettings, saveEngineSettings } from "./config.js";
 import { AGENTS } from "./agents.js";
+
 import {
   companyData,
   addActivity,
@@ -17,121 +17,48 @@ import {
   updateStrategy
 } from "./company.js";
 
-import { SimulationEngine } from "./engines/simulation.engine.js";
-import { RemoteEngine } from "./engines/remote.engine.js";
 import { VirtualOffice } from "./office/office3d.js";
 
-const $ = id => document.getElementById(id);
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+import {
+  createBusinessPlan,
+  generateAgentResult,
+  generateCEOReport
+} from "./simulation/business.simulator.js";
 
-let engineSettings = getEngineSettings();
-let engine = createEngine(engineSettings);
 let office = null;
 let simulationRunning = false;
+let selectedAgentId = null;
 
-const pageNames = {
-  overview: ["Overview", "Monitor aktivitas perusahaan virtual."],
-  office: ["Virtual Headquarters", "Kantor modern dan aktivitas seluruh agent."],
-  agents: ["AI Employees", "Struktur organisasi perusahaan."],
-  tasks: ["Task Management", "Pekerjaan yang dikelola CEO."],
-  products: ["Digital Products", "Portofolio produk digital perusahaan."],
-  content: ["Threads Content", "Pemasaran organik perusahaan."],
-  strategy: ["Business Strategy", "Strategi dan sasaran bisnis."],
-  finance: ["Finance", "Laporan keuangan perusahaan."],
-  engine: ["AI Engine", "Konfigurasi mesin AI."],
-  activity: ["Activity Log", "Riwayat operasional perusahaan."]
-};
+const $ = (id) => document.getElementById(id);
 
-function createEngine(settings) {
-  return settings.mode === "simulation"
-    ? new SimulationEngine()
-    : new RemoteEngine({
-        name: settings.mode,
-        endpoint: settings.endpoint
-      });
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function formatRupiah(value) {
+  return `Rp${Number(value || 0).toLocaleString("id-ID")}`;
 }
 
 function escapeHTML(value = "") {
-  return String(value).replace(/[&<>"']/g, c => ({
+  return String(value).replace(/[&<>"']/g, (char) => ({
     "&": "&amp;",
     "<": "&lt;",
     ">": "&gt;",
     '"': "&quot;",
     "'": "&#039;"
-  })[c]);
-}
-
-function money(value) {
-  return "Rp" + Number(value || 0).toLocaleString("id-ID");
+  })[char]);
 }
 
 function toast(message) {
   const element = $("toast");
+  if (!element) return;
+
   element.textContent = message;
   element.classList.add("show");
+
   clearTimeout(toast.timer);
-  toast.timer = setTimeout(() => element.classList.remove("show"), 3200);
+  toast.timer = setTimeout(() => {
+    element.classList.remove("show");
+  }, 3000);
 }
-
-function setLoading(button, loading, text = "Memproses...") {
-  if (!button) return;
-  if (loading) {
-    button.dataset.original = button.textContent;
-    button.disabled = true;
-    button.textContent = text;
-  } else {
-    button.disabled = false;
-    button.textContent = button.dataset.original || "Simpan";
-  }
-}
-
-function navigate(name) {
-  if (!pageNames[name]) return;
-
-  document.querySelectorAll(".view").forEach(view => {
-    view.classList.toggle("active", view.id === `${name}View`);
-  });
-
-  document.querySelectorAll(".nav-item").forEach(button => {
-    button.classList.toggle("active", button.dataset.view === name);
-  });
-
-  $("pageTitle").textContent = pageNames[name][0];
-  $("pageSubtitle").textContent = pageNames[name][1];
-
-  if (name === "office") initializeOffice();
-}
-
-function initializeOffice() {
-  if (office) {
-    office.resize();
-    return;
-  }
-
-  try {
-    office = new VirtualOffice($("officeScene"));
-
-    office.onSelect = agent => {
-      const state = getAgentState(agent.id);
-
-      $("officeAgentDetails").innerHTML = `
-        <strong>${escapeHTML(agent.icon)} ${escapeHTML(agent.name)}</strong>
-        <span class="status-pill ${state.status.toLowerCase()}">${escapeHTML(state.status)}</span>
-        <br>
-        Jabatan: ${escapeHTML(agent.role)}<br>
-        Departemen: ${escapeHTML(agent.department)}<br>
-        Ruangan: ${escapeHTML(agent.room)}<br>
-        Aktivitas: ${escapeHTML(state.activity)}<br>
-        Pekerjaan: ${escapeHTML(state.currentTask || "-")}
-      `;
-    };
-  } catch (error) {
-    console.error("Office error:", error);
-    $("officeScene").textContent =
-      "Kantor 3D gagal dimuat. Pastikan browser mendukung WebGL.";
-  }
-}
-
 
 function setAgentActivity(
   agentId,
@@ -157,182 +84,234 @@ function setAgentActivity(
   renderAgents();
 }
 
-
-function addTaskForAgent(agentId, title, description, stage) {
-  return createTask({
-    agentId,
-    title,
-    description,
-    source: "CEO",
-    stage
+function navigate(viewName) {
+  document.querySelectorAll(".view").forEach((view) => {
+    view.classList.toggle("active", view.id === `${viewName}View`);
   });
+
+  document.querySelectorAll(".nav-item").forEach((item) => {
+    item.classList.toggle(
+      "active",
+      item.dataset.view === viewName
+    );
+  });
+
+  const titles = {
+    overview: ["Dashboard", "Ringkasan aktivitas perusahaan"],
+    office: ["Virtual Office", "Pantau aktivitas seluruh agent"],
+    agents: ["AI Agents", "Tim digital company"],
+    tasks: ["Task Management", "Daftar pekerjaan perusahaan"],
+    products: ["Products", "Produk digital perusahaan"],
+    content: ["Content Studio", "Draft konten pemasaran"],
+    finance: ["Finance", "Ringkasan keuangan"],
+    strategy: ["Business Strategy", "Strategi dan target bisnis"]
+  };
+
+  const title = titles[viewName];
+
+  if (title) {
+    if ($("pageTitle")) $("pageTitle").textContent = title[0];
+    if ($("pageSubtitle")) $("pageSubtitle").textContent = title[1];
+  }
+
+  if (viewName === "office") {
+    requestAnimationFrame(() => office?.resize());
+  }
+}
+
+function initializeOffice() {
+  if (office) return office;
+
+  const container = $("officeScene");
+  if (!container) {
+    console.error("Elemen #officeScene tidak ditemukan.");
+    return null;
+  }
+
+  try {
+    office = new VirtualOffice(container);
+    return office;
+  } catch (error) {
+    console.error("Gagal membuat virtual office:", error);
+    toast("Virtual office gagal dibuka. Periksa dukungan WebGL.");
+    return null;
+  }
 }
 
 function renderOverview() {
-  $("companyName").textContent = companyData.company.name;
-  $("companyMission").textContent = companyData.company.mission;
-  $("totalAgents").textContent = AGENTS.length;
-
-  $("activeTasks").textContent = companyData.tasks.filter(
-    task => ["Pending", "Working"].includes(task.status)
-  ).length;
-
-  $("totalProducts").textContent = companyData.products.length;
-  $("totalRevenue").textContent = money(companyData.finance.revenue);
-
-  $("overviewAgents").innerHTML = AGENTS.map(agent => {
+  const activeAgents = AGENTS.filter((agent) => {
     const state = getAgentState(agent.id);
+    return ["Working", "Walking", "Meeting"].includes(state.status);
+  }).length;
 
-    return `
-      <div class="agent-mini">
-        <div>
-          <strong>${agent.icon} ${escapeHTML(agent.name)}</strong>
-          <small>${escapeHTML(state.activity)}</small>
+  const activeTasks = companyData.tasks.filter((task) => {
+    return ["Pending", "In Progress"].includes(task.status);
+  }).length;
+
+  if ($("totalAgents")) $("totalAgents").textContent = AGENTS.length;
+  if ($("activeTasks")) $("activeTasks").textContent = activeTasks;
+  if ($("totalProducts")) $("totalProducts").textContent = companyData.products.length;
+  if ($("totalRevenue")) {
+    $("totalRevenue").textContent = formatRupiah(companyData.finance.revenue);
+  }
+
+  if ($("overviewAgents")) {
+    $("overviewAgents").innerHTML = AGENTS.map((agent) => {
+      const state = getAgentState(agent.id);
+
+      return `
+        <div class="agent-summary">
+          <strong>${escapeHTML(agent.name)}</strong>
+          <span>${escapeHTML(agent.role || agent.department || "")}</span>
+          <small>${escapeHTML(state.status)} — ${escapeHTML(state.activity)}</small>
         </div>
-        <span class="status-pill ${state.status.toLowerCase()}">
-          ${escapeHTML(state.status)}
-        </span>
-      </div>
-    `;
-  }).join("");
+      `;
+    }).join("");
+  }
 
-  $("overviewActivities").innerHTML =
-    companyData.activities.slice(0, 8).map(item => `
-      <div class="activity-row">
-        <p>${escapeHTML(item.message)}</p>
-        <small>${new Date(item.date).toLocaleString("id-ID")}</small>
-      </div>
-    `).join("") || "<p>Belum ada aktivitas.</p>";
+  if ($("overviewActivities")) {
+    $("overviewActivities").innerHTML = companyData.activities
+      .slice(0, 8)
+      .map((item) => `
+        <div class="activity-item">
+          <span>${escapeHTML(item.message)}</span>
+          <small>${new Date(item.createdAt).toLocaleString("id-ID")}</small>
+        </div>
+      `).join("");
+  }
 
-  const business = companyData.businessSimulation || {};
-  const phases = [
-    "Briefing CEO",
-    "Riset Pasar",
-    "Pengembangan Produk",
-    "Quality Assurance",
-    "Pemasaran",
-    "Sales Planning",
-    "Financial Planning",
-    "Laporan CEO"
-  ];
+  const progress = companyData.businessSimulation.progress || 0;
 
-  $("businessProgress").innerHTML = phases.map((phase, index) => `
-    <div class="progress-row">
-      <span>${index + 1}. ${phase}</span>
-      <span>${index < (business.progress || 0) ? "✓" : "○"}</span>
-    </div>
-  `).join("");
+  if ($("businessProgress")) {
+    $("businessProgress").style.width = `${progress}%`;
+    $("businessProgress").textContent = `${progress}%`;
+  }
+
+  if ($("activeAgents")) {
+    $("activeAgents").textContent = activeAgents;
+  }
 }
 
 function renderAgents() {
-  $("agentGrid").innerHTML = AGENTS.map(agent => {
+  const container = $("agentGrid");
+  if (!container) return;
+
+  container.innerHTML = AGENTS.map((agent) => {
     const state = getAgentState(agent.id);
 
     return `
-      <article class="panel agent-card">
-        <div class="agent-symbol">${agent.icon}</div>
-        <h3>${escapeHTML(agent.name)}</h3>
-        <small>${escapeHTML(agent.role)}</small>
-        <p>${escapeHTML(agent.description)}</p>
-        <p><strong>Room:</strong> ${escapeHTML(agent.room)}</p>
-        <span class="status-pill ${state.status.toLowerCase()}">${escapeHTML(state.status)}</span>
-        <p><strong>Activity:</strong><br>${escapeHTML(state.activity)}</p>
+      <article class="agent-card">
+        <h3>${escapeHTML(agent.icon || "🤖")} ${escapeHTML(agent.name)}</h3>
+        <p>${escapeHTML(agent.role || agent.department || "")}</p>
+        <p><strong>Status:</strong> ${escapeHTML(state.status)}</p>
+        <p>${escapeHTML(state.activity)}</p>
+        <p>${escapeHTML(state.currentTask || "Tidak ada tugas")}</p>
+        <button data-agent-detail="${escapeHTML(agent.id)}">Detail</button>
       </article>
     `;
   }).join("");
 }
 
 function renderTasks() {
-  $("taskList").innerHTML = companyData.tasks.map(task => `
-    <div class="task-row">
-      <div>
+  const container = $("taskList");
+  if (!container) return;
+
+  container.innerHTML = companyData.tasks.map((task) => {
+    const agent = AGENTS.find((item) => item.id === task.agentId);
+
+    return `
+      <article class="task-card">
         <h3>${escapeHTML(task.title)}</h3>
-        <p>${escapeHTML(task.agentName)} · ${escapeHTML(task.description)}</p>
-        <p>Stage: ${escapeHTML(task.stage)} · Status: ${escapeHTML(task.status)}</p>
-        ${task.result ? `<p>Result: ${escapeHTML(JSON.stringify(task.result))}</p>` : ""}
-      </div>
-      <span class="status-pill ${task.status.toLowerCase()}">${escapeHTML(task.status)}</span>
-    </div>
-  `).join("") || '<div class="panel">Belum ada task.</div>';
+        <p>${escapeHTML(task.description)}</p>
+        <small>Agent: ${escapeHTML(agent?.name || task.agentId)}</small>
+        <p>Status: ${escapeHTML(task.status)}</p>
+        <progress value="${Number(task.progress) || 0}" max="100"></progress>
+        <small>${Number(task.progress) || 0}%</small>
+        ${task.result ? `<p>${escapeHTML(task.result)}</p>` : ""}
+      </article>
+    `;
+  }).join("");
 }
 
 function renderProducts() {
-  $("productList").innerHTML = companyData.products.map(product => `
+  const container = $("productList");
+  if (!container) return;
+
+  container.innerHTML = companyData.products.map((product) => `
     <article class="product-card">
       <h3>${escapeHTML(product.name)}</h3>
       <p>${escapeHTML(product.description)}</p>
-      <div class="product-price">${money(product.price)}</div>
-      <span class="status-pill">${escapeHTML(product.status)}</span>
-      ${product.lynkUrl
-        ? `<a href="${escapeHTML(product.lynkUrl)}" target="_blank" rel="noopener noreferrer">Buka Lynk.id ↗</a>`
-        : "<small>Link toko belum tersedia.</small>"}
+      <strong>${formatRupiah(product.price)}</strong>
+      <p>Status: ${escapeHTML(product.status)}</p>
+      ${product.url
+        ? `<a href="${escapeHTML(product.url)}" target="_blank" rel="noopener">Buka link produk</a>`
+        : ""}
     </article>
-  `).join("") || '<div class="panel">Belum ada produk.</div>';
+  `).join("");
 }
 
 function renderContents() {
-  $("contentList").innerHTML = companyData.contents.map(item => `
-    <div class="content-row">
-      <div>
-        <h3>${escapeHTML(item.title)}</h3>
-        <p>${escapeHTML(item.body)}</p>
-        <span class="status-pill ${item.status.toLowerCase().replaceAll(" ", "-")}">${escapeHTML(item.status)}</span>
-      </div>
-      <div class="task-actions">
-        ${item.status === "Pending Approval" ? `
-          <button class="primary-button small-button" data-approve="${item.id}">Setujui</button>
-          <button class="secondary-button small-button" data-reject="${item.id}">Tolak</button>
-        ` : ""}
-      </div>
-    </div>
-  `).join("") || '<div class="panel">Belum ada konten.</div>';
+  const container = $("contentList");
+  if (!container) return;
+
+  container.innerHTML = companyData.contents.map((content) => `
+    <article class="content-card">
+      <h3>${escapeHTML(content.title)}</h3>
+      <p>${escapeHTML(content.body)}</p>
+      <small>${escapeHTML(content.platform)} · ${escapeHTML(content.status)}</small>
+      ${
+        content.status === "Pending Approval"
+          ? `
+            <button data-approve="${escapeHTML(content.id)}">Approve</button>
+            <button data-reject="${escapeHTML(content.id)}">Reject</button>
+          `
+          : ""
+      }
+    </article>
+  `).join("");
 }
 
 function renderFinance() {
-  const finance = companyData.finance;
+  const revenue = companyData.finance.revenue || 0;
+  const expenses = companyData.finance.expenses || 0;
 
-  $("financeSummary").innerHTML = `
-    <div class="stat-card"><span>Revenue</span><strong>${money(finance.revenue)}</strong></div>
-    <div class="stat-card"><span>Expenses</span><strong>${money(finance.expenses)}</strong></div>
-    <div class="stat-card"><span>Profit</span><strong>${money(finance.revenue - finance.expenses)}</strong></div>
-    <div class="stat-card"><span>Transactions</span><strong>${companyData.sales.length}</strong></div>
-  `;
+  if ($("financeSummary")) {
+    $("financeSummary").innerHTML = `
+      <p>Total revenue tercatat: <strong>${formatRupiah(revenue)}</strong></p>
+      <p>Total pengeluaran tercatat: <strong>${formatRupiah(expenses)}</strong></p>
+      <p>Selisih: <strong>${formatRupiah(revenue - expenses)}</strong></p>
+      <small>Angka ini berasal dari pencatatan manual, bukan transaksi Lynk.id otomatis.</small>
+    `;
+  }
 
-  $("salesList").innerHTML = companyData.sales.map(sale => `
-    <div class="task-row">
-      <div><h3>${escapeHTML(sale.productName)}</h3><p>${new Date(sale.date).toLocaleString("id-ID")}</p></div>
-      <strong>${money(sale.amount)}</strong>
-    </div>
-  `).join("") || '<div class="panel">Belum ada transaksi.</div>';
+  if ($("salesList")) {
+    $("salesList").innerHTML = companyData.sales.map((sale) => `
+      <div class="sale-item">
+        ${formatRupiah(sale.amount)}
+        <small>${escapeHTML(sale.note || "")}</small>
+      </div>
+    `).join("");
+  }
 }
 
 function renderStrategy() {
-  $("strategyMarket").value = companyData.strategy.market;
-  $("strategyPlan").value = companyData.strategy.plan;
-  $("strategyTarget").value = companyData.strategy.target;
+  const strategy = companyData.strategy;
+
+  if ($("strategyMarket")) $("strategyMarket").textContent = strategy.market;
+  if ($("strategyPlan")) $("strategyPlan").textContent = strategy.plan;
+  if ($("strategyTarget")) $("strategyTarget").textContent = strategy.target;
 }
 
-function renderActivity() {
-  $("activityList").innerHTML = companyData.activities.map(item => `
-    <div class="activity-row">
+function renderActivities() {
+  const container = $("activityList");
+  if (!container) return;
+
+  container.innerHTML = companyData.activities.map((item) => `
+    <div class="activity-item">
       <p>${escapeHTML(item.message)}</p>
-      <small>${new Date(item.date).toLocaleString("id-ID")}</small>
+      <small>${new Date(item.createdAt).toLocaleString("id-ID")}</small>
     </div>
-  `).join("") || '<div class="panel">Belum ada aktivitas.</div>';
-}
-
-function renderEngine() {
-  $("engineSelect").value = engineSettings.mode;
-  $("apiEndpoint").value = engineSettings.endpoint;
-  $("remoteSettings").classList.toggle(
-    "hidden",
-    engineSettings.mode === "simulation"
-  );
-
-  $("engineStatus").textContent =
-    engineSettings.mode === "simulation"
-      ? "Simulation Engine"
-      : `${engineSettings.mode} Engine`;
+  `).join("");
 }
 
 function renderAll() {
@@ -343,542 +322,478 @@ function renderAll() {
   renderContents();
   renderFinance();
   renderStrategy();
-  renderActivity();
-  renderEngine();
+  renderActivities();
 }
 
-async function executeAgentTask(task, plan, phaseNumber) {
-  updateTask(task.id, { status: "Working" });
+function showAgentDetails(agentId) {
+  const agent = AGENTS.find((item) => item.id === agentId);
+  if (!agent) return;
+
+  const state = getAgentState(agentId);
+  selectedAgentId = agentId;
+
+  const container = $("officeAgentDetails");
+  if (!container) return;
+
+  container.innerHTML = `
+    <h3>${escapeHTML(agent.name)}</h3>
+    <p>${escapeHTML(agent.role || agent.department || "")}</p>
+    <p>Status: ${escapeHTML(state.status)}</p>
+    <p>Aktivitas: ${escapeHTML(state.activity)}</p>
+    <p>Tugas: ${escapeHTML(state.currentTask || "-")}</p>
+  `;
+}
+
+async function runAgentTask(agent, plan, command) {
+  const task = createTask({
+    title: `${agent.name}: ${plan.productName || "Analisis bisnis"}`,
+    description: command,
+    agentId: agent.id,
+    priority: "High"
+  });
+
+  updateTask(task.id, {
+    status: "In Progress",
+    progress: 10
+  });
 
   setAgentActivity(
-    task.agentId,
+    agent.id,
     "Walking",
-    "Berjalan menuju ruang kerja",
-    task.title
+    "Menuju meja kerja",
+    task.title,
+    "work"
   );
 
-  await sleep(1500);
+  await wait(1200);
 
   setAgentActivity(
-    task.agentId,
+    agent.id,
     "Working",
     "Sedang mengerjakan tugas",
-    task.title
+    task.title,
+    "work"
   );
 
-  updateTask(task.id, { status: "Working" });
-  renderAll();
+  await wait(1800);
 
-  try {
-    const output = await engine.runTask(task, { plan });
+  const result = generateAgentResult(agent.id, plan, command);
 
-    updateTask(task.id, {
-      status: "Completed",
-      result: output.result,
-      completedAt: new Date().toISOString()
-    });
+  updateTask(task.id, {
+    status: "Completed",
+    progress: 100,
+    result: result.summary || result.result || "Tugas selesai."
+  });
 
-    setAgentActivity(
-      task.agentId,
-      "Idle",
-      "Pekerjaan selesai, menunggu instruksi",
-      ""
-    );
+  setAgentActivity(
+    agent.id,
+    "Idle",
+    "Menunggu tugas berikutnya",
+    ""
+  );
 
-    addActivity(
-      `${task.agentName} menyelesaikan pekerjaan: ${task.title}`,
-      "success"
-    );
+  addActivity(
+    `${agent.name} menyelesaikan tugas: ${result.summary || result.result || "Selesai"}`,
+    agent.id,
+    "completed"
+  );
 
-    setBusinessSimulation({ progress: phaseNumber });
-    renderAll();
-
-    return output.result;
-  } catch (error) {
-    updateTask(task.id, {
-      status: "Failed",
-      result: { error: error.message }
-    });
-
-    setAgentActivity(
-      task.agentId,
-      "Idle",
-      "Pekerjaan gagal",
-      task.title
-    );
-
-    addActivity(`${task.agentName} gagal: ${error.message}`, "error");
-    renderAll();
-    throw error;
-  }
-}
-
-async function runDepartmentTask(agentId, title, description, plan, phase) {
-  const task = addTaskForAgent(agentId, title, description, phase);
-  renderAll();
-  return executeAgentTask(task, plan, phase);
+  renderTasks();
+  return result;
 }
 
 async function runBusinessSimulation(command) {
   if (simulationRunning) {
-    toast("Simulasi sedang berjalan. Tunggu hingga selesai.");
+    toast("Simulasi sedang berjalan. Tunggu sampai selesai.");
     return;
   }
 
   simulationRunning = true;
-  const button = $("submitCommand");
-  setLoading(button, true, "CEO sedang briefing...");
+  navigate("office");
+  initializeOffice();
+
+  const runId = `RUN-${Date.now()}`;
+
+  setBusinessSimulation({
+    phase: "CEO Briefing",
+    progress: 0,
+    currentRun: runId
+  });
+
+  addActivity(`Owner memberikan perintah: ${command}`, "owner", "command");
 
   try {
-    addActivity(`Owner memberikan perintah: ${command}`, "command");
+    // CEO berjalan menuju meeting
+    setAgentActivity(
+      "ceo",
+      "Walking",
+      "Menuju ruang meeting",
+      "Briefing CEO",
+      "meeting"
+    );
 
-    // PHASE 1: CEO briefing.
-    setBusinessSimulation({
-      phase: "Briefing CEO",
-      progress: 0,
-      currentRun: command
-    });
+    await wait(2200);
 
-    navigate("office");
-    setAgentActivity("ceo", "Walking", "Menuju ruang meeting", "Briefing CEO");
-    await sleep(1400);
-
+    // Semua agent berpindah ke posisi meeting yang berbeda
     office?.sendToMeeting();
 
-    for (const agent of AGENTS) {
+    AGENTS.forEach((agent) => {
       setAgentState(agent.id, {
         status: "Meeting",
         activity: "Mengikuti briefing CEO",
-        currentTask: "Company briefing"
+        currentTask: "Briefing perusahaan"
       });
-    }
-
-    addActivity("CEO memulai briefing bersama seluruh departemen.");
-    renderAll();
-    await sleep(1800);
-
-    const ceoOutput = await engine.runCEO(command, {
-      company: companyData.company,
-      strategy: companyData.strategy
     });
-
-    const plan = ceoOutput.plan || {
-      targetMarket: companyData.strategy.market,
-      suggestedName: "Digital Product Proposal",
-      productType: "Digital Toolkit",
-      price: 49000,
-      estimatedCost: 5000,
-      estimatedMargin: 44000
-    };
-
-    addActivity(`CEO menetapkan target awal: ${plan.targetMarket}.`);
-    addActivity(`CEO membagi pekerjaan kepada departemen terkait.`);
-
-    // Agent meninggalkan meeting dan kembali ke ruang kerja.
-    office?.returnToWork();
-    for (const agent of AGENTS) {
-      setAgentState(agent.id, {
-        status: "Walking",
-        activity: "Kembali ke ruang kerja",
-        currentTask: ""
-      });
-    }
 
     renderAll();
-    await sleep(1400);
+    await wait(1800);
 
-    // Simpan strategi awal.
-    updateStrategy({
-      market: plan.targetMarket,
-      plan: `Produk: ${plan.suggestedName}. Kanal pemasaran: Threads organik. Tahap berikutnya adalah validasi pasar.`,
-      target: companyData.strategy.target || 1000000
-    });
+    const plan = createBusinessPlan(command);
 
-    // PHASE 2: Research.
-    setBusinessSimulation({ phase: "Riset Pasar", progress: 1 });
-    const research = await runDepartmentTask(
-      "research",
-      "Melakukan riset kebutuhan dan peluang pasar",
-      command,
-      plan,
-      2
+    addActivity(
+      `CEO menetapkan rencana bisnis untuk ${plan.productName || "produk baru"}.`,
+      "ceo",
+      "strategy"
     );
 
-    // PHASE 3: Product.
-    setBusinessSimulation({ phase: "Pengembangan Produk", progress: 2 });
-    const product = await runDepartmentTask(
-      "product",
-      "Menyusun konsep produk digital",
-      JSON.stringify(research),
-      plan,
-      3
-    );
+    const workAgents = AGENTS.filter((agent) => agent.id !== "ceo");
+    const results = [];
 
-    // PHASE 4: QA.
-    setBusinessSimulation({ phase: "Quality Assurance", progress: 3 });
-    const qa = await runDepartmentTask(
-      "qa",
-      "Memeriksa kualitas konsep produk",
-      JSON.stringify(product),
-      plan,
-      4
-    );
+    // CEO membagikan pekerjaan
+    for (let index = 0; index < workAgents.length; index++) {
+      const agent = workAgents[index];
 
-    // PHASE 5: Content.
-    setBusinessSimulation({ phase: "Pemasaran", progress: 4 });
-    const content = await runDepartmentTask(
-      "content",
-      "Menyusun strategi konten Threads",
-      JSON.stringify({ plan, research, product }),
-      plan,
-      5
-    );
-
-    // PHASE 6: Sales.
-    setBusinessSimulation({ phase: "Sales Planning", progress: 5 });
-    const sales = await runDepartmentTask(
-      "sales",
-      "Menyusun strategi layanan pelanggan dan penjualan",
-      JSON.stringify({ plan, product }),
-      plan,
-      6
-    );
-
-    // PHASE 7: Finance.
-    setBusinessSimulation({ phase: "Financial Planning", progress: 6 });
-    const finance = await runDepartmentTask(
-      "finance",
-      "Menghitung kelayakan dan estimasi keuangan",
-      JSON.stringify(plan),
-      plan,
-      7
-    );
-
-    // Buat draft produk dari hasil simulasi.
-    const createdProduct = addProduct({
-      name: plan.suggestedName,
-      description: `${product.summary} ${product.recommendation}`,
-      price: plan.price,
-      status: "Draft"
-    });
-
-    // Buat konten draft untuk persetujuan Owner.
-    const postIdeas = content.posts || [
-      "Tips praktis untuk target pelanggan.",
-      "Cerita proses pembuatan produk."
-    ];
-
-    addContent({
-      title: postIdeas[0],
-      body: `${postIdeas[0]}\n\n${content.recommendation || ""}`
-    });
-
-    addContent({
-      title: postIdeas[1],
-      body: `${postIdeas[1]}\n\nPelajari solusi yang sesuai dengan kebutuhanmu.`
-    });
-
-    // PHASE 8: CEO report.
-    setBusinessSimulation({ phase: "Laporan CEO", progress: 7 });
-    setAgentActivity("ceo", "Walking", "Menyiapkan laporan hasil tim", "CEO report");
-    await sleep(1300);
-
-    const finalReport = typeof engine.createFinalReport === "function"
-      ? engine.createFinalReport(plan)
-      : {
-          title: "CEO Report",
-          summary: "Laporan hasil departemen telah diterima.",
-          decision: "Periksa seluruh hasil dan validasi sebelum peluncuran."
-        };
+      setAgentActivity(
+        agent.id,
+        "Walking",
+        "Menuju area kerja",
+        "Menerima tugas dari CEO",
+        "work"
+      );
+    }
 
     setAgentActivity(
       "ceo",
       "Working",
-      "Mengevaluasi hasil seluruh departemen",
-      "Final business evaluation"
+      "Membagikan tugas kepada seluruh agent",
+      "Koordinasi perusahaan"
     );
 
-    await sleep(1200);
+    await wait(1800);
 
-    companyData.businessSimulation = {
-      ...(companyData.businessSimulation || {}),
-      phase: "Simulation Completed",
-      progress: 8,
-      lastReport: finalReport,
-      lastPlan: plan,
-      lastProductId: createdProduct.id
-    };
+    // Agent menjalankan tugas secara berurutan
+    for (let index = 0; index < workAgents.length; index++) {
+      const agent = workAgents[index];
+
+      const progress = Math.round(
+        ((index + 1) / workAgents.length) * 85
+      );
+
+      setBusinessSimulation({
+        phase: `Pekerjaan ${agent.name}`,
+        progress
+      });
+
+      const result = await runAgentTask(agent, plan, command);
+      results.push({
+        agentId: agent.id,
+        ...result
+      });
+    }
+
+    // CEO menyusun laporan
+    setAgentActivity(
+      "ceo",
+      "Working",
+      "Menganalisis laporan seluruh departemen",
+      "Final business report"
+    );
+
+    setBusinessSimulation({
+      phase: "CEO Final Report",
+      progress: 95
+    });
+
+    await wait(1800);
+
+    const report = generateCEOReport(plan, results);
+
+    // Simpan draft produk, bukan produk yang sudah terjual
+    if (plan.productName) {
+      addProduct({
+        name: plan.productName,
+        description: plan.productDescription || "Draft produk hasil simulasi.",
+        price: plan.price || 0,
+        status: "Draft"
+      });
+    }
+
+    // Buat draft konten yang harus disetujui Owner
+    if (plan.productName) {
+      addContent({
+        title: `Konten pengenalan ${plan.productName}`,
+        body: `Kami sedang menyiapkan ${plan.productName}. Produk ini dirancang untuk membantu ${plan.targetMarket || "pengguna"} menyelesaikan masalah yang relevan. Menurut kamu, fitur apa yang paling penting?`,
+        platform: "Threads"
+      });
+
+      addContent({
+        title: `Konten edukasi ${plan.productName}`,
+        body: `Sebelum memilih produk digital, penting untuk memahami masalah yang ingin diselesaikan. Kami sedang mengembangkan ${plan.productName} dengan pendekatan yang praktis dan mudah digunakan.`,
+        platform: "Threads"
+      });
+    }
+
+    updateStrategy({
+      market: plan.targetMarket || "Belum ditentukan",
+      plan: report.summary || "Strategi hasil simulasi.",
+      target: plan.target || 0
+    });
+
+    setBusinessSimulation({
+      phase: "Selesai",
+      progress: 100,
+      currentRun: runId,
+      lastReport: report
+    });
 
     setAgentActivity(
       "ceo",
       "Idle",
-      "Laporan selesai, menunggu keputusan Owner",
+      "Menunggu perintah Owner",
       ""
     );
 
-    addActivity("CEO menyelesaikan laporan dan menyerahkan hasil kepada Owner.");
-    addActivity("Simulasi selesai. Produk dan konten disimpan sebagai draft.");
+    workAgents.forEach((agent) => {
+      setAgentState(agent.id, {
+        status: "Idle",
+        activity: "Menunggu tugas berikutnya",
+        currentTask: ""
+      });
+    });
+
+    addActivity("CEO menyelesaikan laporan simulasi bisnis.", "ceo", "report");
 
     renderAll();
-    navigate("overview");
-    toast("Simulasi bisnis selesai. Periksa hasilnya di dashboard.");
-    showReport(finalReport, research, product, qa, content, sales, finance);
+    showReport(report);
+
+    toast("Simulasi bisnis selesai.");
   } catch (error) {
-    console.error(error);
-    addActivity(`Simulasi mengalami kendala: ${error.message}`, "error");
-    toast(`Simulasi berhenti: ${error.message}`);
+    console.error("Simulation error:", error);
+
+    addActivity(
+      `Simulasi gagal: ${error.message}`,
+      "system",
+      "error"
+    );
+
+    setBusinessSimulation({
+      phase: "Terjadi kesalahan",
+      currentRun: runId
+    });
+
+    toast(`Simulasi gagal: ${error.message}`);
   } finally {
     simulationRunning = false;
-    setLoading(button, false);
     renderAll();
   }
 }
 
-function showReport(report, research, product, qa, content, sales, finance) {
-  const reportText = [
-    report.summary,
-    report.decision,
-    "",
-    "RESEARCH:",
-    research?.summary,
-    "",
-    "PRODUCT:",
-    product?.summary,
-    "",
-    "QA:",
-    qa?.summary,
-    "",
-    "CONTENT:",
-    content?.summary,
-    "",
-    "SALES:",
-    sales?.summary,
-    "",
-    "FINANCE:",
-    finance?.summary
-  ].filter(Boolean).join("\n");
+function showReport(report) {
+  const container = $("officeAgentDetails");
+  if (!container) return;
 
-  console.info("CEO FINAL REPORT\n", reportText);
-  $("officeAgentDetails").textContent = reportText;
+  const summary = report.summary || report.result || "Laporan simulasi selesai.";
+
+  container.innerHTML = `
+    <h3>Laporan CEO</h3>
+    <p>${escapeHTML(summary)}</p>
+    <small>Ini adalah hasil simulasi berbasis aturan, bukan hasil riset pasar aktual.</small>
+  `;
+}
+
+function openCommandModal() {
+  $("commandModal")?.classList.add("open");
+  $("ownerCommand")?.focus();
+}
+
+function closeCommandModal() {
+  $("commandModal")?.classList.remove("open");
 }
 
 function bindEvents() {
-  document.querySelectorAll(".nav-item").forEach(button => {
-    button.addEventListener("click", () => navigate(button.dataset.view));
+  document.querySelectorAll(".nav-item[data-view]").forEach((item) => {
+    item.addEventListener("click", () => navigate(item.dataset.view));
   });
 
-  document.querySelectorAll("[data-goto]").forEach(button => {
-    button.addEventListener("click", () => navigate(button.dataset.goto));
+  document.querySelectorAll("[data-goto]").forEach((item) => {
+    item.addEventListener("click", () => navigate(item.dataset.goto));
   });
 
-  $("openCommand").addEventListener("click", () => {
-    $("commandModal").classList.remove("hidden");
-    $("ownerCommand").focus();
-  });
+  $("openCommand")?.addEventListener("click", openCommandModal);
+  $("closeCommand")?.addEventListener("click", closeCommandModal);
 
-  $("closeCommand").addEventListener("click", () => {
-    $("commandModal").classList.add("hidden");
-  });
-
-  $("commandModal").addEventListener("click", event => {
-    if (event.target === $("commandModal")) {
-      $("commandModal").classList.add("hidden");
-    }
-  });
-
-  $("commandForm").addEventListener("submit", async event => {
+  $("commandForm")?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (simulationRunning) return;
 
-    const command = $("ownerCommand").value.trim();
-    if (!command) return;
+    const command = $("ownerCommand")?.value.trim();
+    if (!command) {
+      toast("Masukkan perintah terlebih dahulu.");
+      return;
+    }
 
-    $("commandModal").classList.add("hidden");
+    closeCommandModal();
     $("ownerCommand").value = "";
 
     await runBusinessSimulation(command);
   });
 
-  $("resetCamera").addEventListener("click", () => office?.resetCamera());
+  $("meetingButton")?.addEventListener("click", () => {
+    if (!office) return;
 
-  $("meetingButton").addEventListener("click", async () => {
-    if (simulationRunning) {
-      toast("Simulasi sedang berjalan.");
-      return;
-    }
+    office.sendToMeeting();
 
-    initializeOffice();
-    office?.sendToMeeting();
-
-    for (const agent of AGENTS) {
+    AGENTS.forEach((agent) => {
       setAgentState(agent.id, {
         status: "Meeting",
         activity: "Mengikuti meeting",
-        currentTask: "Owner meeting"
+        currentTask: "Meeting Owner"
       });
-    }
-
-    renderAll();
-    toast("Meeting dimulai.");
-
-    await sleep(4000);
-    office?.returnToWork();
-
-    for (const agent of AGENTS) {
-      setAgentState(agent.id, {
-        status: "Idle",
-        activity: "Menunggu pekerjaan",
-        currentTask: ""
-      });
-    }
+    });
 
     renderAll();
   });
 
-  $("openProductForm").addEventListener("click", () => $("productForm").classList.remove("hidden"));
-  $("cancelProduct").addEventListener("click", () => $("productForm").classList.add("hidden"));
+  $("resetCamera")?.addEventListener("click", () => office?.resetCamera());
 
-  $("productForm").addEventListener("submit", event => {
-    event.preventDefault();
-
-    try {
-      const url = $("productUrl").value.trim();
-      if (url && !/^https:\/\/(www\.)?lynk\.id\//i.test(url)) {
-        throw new Error("Masukkan link HTTPS Lynk.id yang valid.");
-      }
-
-      addProduct({
-        name: $("productName").value.trim(),
-        description: $("productDescription").value.trim(),
-        price: $("productPrice").value,
-        lynkUrl: url
-      });
-
-      event.target.reset();
-      event.target.classList.add("hidden");
-      renderAll();
-      toast("Produk ditambahkan.");
-    } catch (error) {
-      toast(error.message);
-    }
+  $("openProductForm")?.addEventListener("click", () => {
+    $("productForm")?.classList.add("open");
   });
 
-  $("openContentForm").addEventListener("click", () => $("contentForm").classList.remove("hidden"));
-  $("cancelContent").addEventListener("click", () => $("contentForm").classList.add("hidden"));
+  $("cancelProduct")?.addEventListener("click", () => {
+    $("productForm")?.classList.remove("open");
+  });
 
-  $("contentForm").addEventListener("submit", event => {
+  $("productForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    addContent({
-      title: $("contentTitle").value.trim(),
-      body: $("contentBody").value.trim()
+    addProduct({
+      name: $("productName")?.value,
+      description: $("productDescription")?.value,
+      price: $("productPrice")?.value,
+      url: $("productUrl")?.value
     });
 
     event.target.reset();
-    event.target.classList.add("hidden");
+    $("productForm")?.classList.remove("open");
     renderAll();
-    toast("Konten disimpan untuk persetujuan Owner.");
+    toast("Produk berhasil disimpan sebagai draft.");
   });
 
-  $("contentList").addEventListener("click", event => {
-    const approve = event.target.closest("[data-approve]");
-    const reject = event.target.closest("[data-reject]");
-
-    try {
-      if (approve) approveContent(approve.dataset.approve);
-      if (reject) rejectContent(reject.dataset.reject);
-      renderAll();
-    } catch (error) {
-      toast(error.message);
-    }
+  $("openContentForm")?.addEventListener("click", () => {
+    $("contentForm")?.classList.add("open");
   });
 
-  $("strategyForm").addEventListener("submit", event => {
+  $("cancelContent")?.addEventListener("click", () => {
+    $("contentForm")?.classList.remove("open");
+  });
+
+  $("contentForm")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    addContent({
+      title: $("contentTitle")?.value,
+      body: $("contentBody")?.value,
+      platform: "Threads"
+    });
+
+    event.target.reset();
+    $("contentForm")?.classList.remove("open");
+    renderAll();
+    toast("Draft konten berhasil dibuat.");
+  });
+
+  $("strategyForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
 
     updateStrategy({
-      market: $("strategyMarket").value,
-      plan: $("strategyPlan").value,
-      target: $("strategyTarget").value
+      market: $("strategyMarketInput")?.value || companyData.strategy.market,
+      plan: $("strategyPlanInput")?.value || companyData.strategy.plan,
+      target: Number($("strategyTargetInput")?.value) || 0
     });
 
-    toast("Strategi diperbarui.");
+    renderAll();
+    toast("Strategi berhasil disimpan.");
   });
 
-  $("saleForm").addEventListener("submit", event => {
+  $("saleForm")?.addEventListener("submit", (event) => {
     event.preventDefault();
 
-    try {
-      addSale($("saleProduct").value, $("saleAmount").value);
-      event.target.reset();
+    addSale({
+      productId: $("saleProduct")?.value || "",
+      amount: $("saleAmount")?.value,
+      note: "Pencatatan manual oleh Owner"
+    });
+
+    event.target.reset();
+    renderAll();
+    toast("Penjualan manual berhasil dicatat.");
+  });
+
+  $("agentGrid")?.addEventListener("click", (event) => {
+    const button = event.target.closest("[data-agent-detail]");
+    if (!button) return;
+
+    showAgentDetails(button.dataset.agentDetail);
+  });
+
+  $("contentList")?.addEventListener("click", (event) => {
+    const approveButton = event.target.closest("[data-approve]");
+    const rejectButton = event.target.closest("[data-reject]");
+
+    if (approveButton) {
+      approveContent(approveButton.dataset.approve);
       renderAll();
-      toast("Transaksi dicatat.");
-    } catch (error) {
-      toast(error.message);
+      toast("Konten disetujui. Belum dipublikasikan.");
+    }
+
+    if (rejectButton) {
+      rejectContent(rejectButton.dataset.reject);
+      renderAll();
+      toast("Konten ditolak.");
     }
   });
 
-  $("engineSelect").addEventListener("change", event => {
-    $("remoteSettings").classList.toggle(
-      "hidden",
-      event.target.value === "simulation"
-    );
-  });
-
-  $("saveEngine").addEventListener("click", () => {
-    const mode = $("engineSelect").value;
-    const endpoint = $("apiEndpoint").value.trim();
-
-    if (mode !== "simulation" && !endpoint) {
-      toast("Masukkan URL backend.");
-      return;
-    }
-
-    if (mode !== "simulation" && !/^https:\/\//i.test(endpoint)) {
-      toast("Gunakan HTTPS untuk backend.");
-      return;
-    }
-
-    engineSettings = { mode, endpoint };
-    saveEngineSettings(engineSettings);
-    engine = createEngine(engineSettings);
-    renderEngine();
-    toast("Engine berhasil dikonfigurasi.");
-  });
-
-  $("testEngine").addEventListener("click", async () => {
-    const settings = {
-      mode: $("engineSelect").value,
-      endpoint: $("apiEndpoint").value.trim()
-    };
-
-    try {
-      const result = await createEngine(settings).healthCheck();
-      $("engineMessage").textContent = result.message;
-      toast(result.ok ? "Engine siap." : "Engine belum terhubung.");
-    } catch (error) {
-      $("engineMessage").textContent = error.message;
-      toast(error.message);
-    }
+  window.addEventListener("beforeunload", () => {
+    office?.destroy();
   });
 }
 
 function initialize() {
   bindEvents();
   renderAll();
-  navigate("overview");
+  initializeOffice();
 
-  console.log("AI Company HQ ready.");
-  console.log("Active engine:", engineSettings.mode);
+  if ($("companyName")) {
+    $("companyName").textContent = companyData.company.name;
+  }
+
+  if ($("companyMission")) {
+    $("companyMission").textContent = companyData.company.mission;
+  }
+
+  window.AICompany = {
+    getData: () => companyData,
+    getAgents: () => AGENTS,
+    runSimulation: runBusinessSimulation,
+    addActivity,
+    navigate
+  };
+
+  navigate("overview");
 }
 
-initialize();
-
-window.AICompany = {
-  getData: () => companyData,
-  getAgents: () => AGENTS,
-  getEngine: () => engineSettings.mode,
-  runSimulation: runBusinessSimulation,
-  addActivity,
-  navigate
-};
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", initialize);
+} else {
+  initialize();
+}
