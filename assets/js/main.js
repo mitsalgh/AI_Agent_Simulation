@@ -132,7 +132,14 @@ function initializeOffice() {
   }
 }
 
-function setAgentActivity(agentId, status, activity, currentTask = "") {
+
+function setAgentActivity(
+  agentId,
+  status,
+  activity,
+  currentTask = "",
+  destination = "work"
+) {
   setAgentState(agentId, {
     status,
     activity,
@@ -143,12 +150,13 @@ function setAgentActivity(agentId, status, activity, currentTask = "") {
     agentId,
     status,
     activity,
-    status === "Meeting" ? "meeting" : "work"
+    destination
   );
 
   renderOverview();
   renderAgents();
 }
+
 
 function addTaskForAgent(agentId, title, description, stage) {
   return createTask({
