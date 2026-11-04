@@ -17,313 +17,220 @@
   </script>
 </head>
 <body>
-  <div class="app-shell">
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-icon">AI</div>
-        <div>
-          <strong>AI COMPANY</strong>
-          <small>Virtual Business System</small>
-        </div>
+<div class="app-shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">AI</div>
+      <div><strong>AI COMPANY</strong><small>Virtual Business HQ</small></div>
+    </div>
+
+    <div class="owner-card">
+      <div class="avatar">O</div>
+      <div><strong>Company Owner</strong><small>Administrator</small></div>
+    </div>
+
+    <nav class="navigation">
+      <span class="nav-label">WORKSPACE</span>
+      <button class="nav-item active" data-view="overview">▦ Overview</button>
+      <button class="nav-item" data-view="office">▣ 3D Office</button>
+      <button class="nav-item" data-view="agents">♟ AI Employees</button>
+      <button class="nav-item" data-view="tasks">☷ Task Management</button>
+
+      <span class="nav-label">BUSINESS</span>
+      <button class="nav-item" data-view="products">◇ Products</button>
+      <button class="nav-item" data-view="content">✎ Threads Content</button>
+      <button class="nav-item" data-view="strategy">⌘ Strategy</button>
+      <button class="nav-item" data-view="finance">＄ Finance</button>
+
+      <span class="nav-label">SYSTEM</span>
+      <button class="nav-item" data-view="engine">⚙ AI Engine</button>
+      <button class="nav-item" data-view="activity">◷ Activity Log</button>
+    </nav>
+
+    <div class="sidebar-bottom">
+      <div class="connection-indicator">
+        <span class="status-dot"></span>
+        <span id="engineStatus">Simulation Engine</span>
       </div>
+      <small>Plug & Play Architecture</small>
+    </div>
+  </aside>
 
-      <div class="owner-card">
-        <div class="avatar">O</div>
-        <div>
-          <strong>Company Owner</strong>
-          <small>Administrator</small>
-        </div>
+  <main class="main-area">
+    <header class="topbar">
+      <div>
+        <h1 id="pageTitle">Overview</h1>
+        <p id="pageSubtitle">Monitor aktivitas perusahaan virtual.</p>
       </div>
+      <button class="primary-button" id="openCommand">＋ Beri Perintah</button>
+    </header>
 
-      <nav class="navigation">
-        <span class="nav-label">WORKSPACE</span>
-        <button class="nav-item active" data-view="overview">▦ Overview</button>
-        <button class="nav-item" data-view="office">▣ Virtual Office</button>
-        <button class="nav-item" data-view="agents">♟ AI Agents</button>
-        <button class="nav-item" data-view="tasks">☷ Tasks</button>
-
-        <span class="nav-label">BUSINESS</span>
-        <button class="nav-item" data-view="products">◇ Products</button>
-        <button class="nav-item" data-view="content">✎ Threads Content</button>
-        <button class="nav-item" data-view="strategy">⌘ Business Strategy</button>
-        <button class="nav-item" data-view="finance">＄ Finance</button>
-
-        <span class="nav-label">SYSTEM</span>
-        <button class="nav-item" data-view="engine">⚙ AI Engine</button>
-        <button class="nav-item" data-view="integrations">⇄ Integrations</button>
-        <button class="nav-item" data-view="activity">◷ Activity Log</button>
-      </nav>
-
-      <div class="sidebar-bottom">
-        <div class="connection-indicator">
-          <span class="status-dot"></span>
-          <span id="engineStatus">Simulation Engine</span>
+    <div class="content-area">
+      <section class="view active" id="overviewView">
+        <div class="welcome-panel">
+          <div>
+            <span class="eyebrow">VIRTUAL BUSINESS HEADQUARTERS</span>
+            <h2 id="companyName">Mitsal Digital Company</h2>
+            <p id="companyMission"></p>
+          </div>
+          <div class="welcome-mark">HQ</div>
         </div>
-        <small>Plug & Play Architecture</small>
-      </div>
-    </aside>
 
-    <main class="main-area">
-      <header class="topbar">
-        <div>
-          <h1 id="pageTitle">Overview</h1>
-          <p id="pageSubtitle">Monitor aktivitas perusahaan virtual kamu.</p>
+        <div class="stats-grid">
+          <div class="stat-card"><span>AI Employees</span><strong id="totalAgents">7</strong><small>Active workforce</small></div>
+          <div class="stat-card"><span>Active Tasks</span><strong id="activeTasks">0</strong><small>Pending + working</small></div>
+          <div class="stat-card"><span>Digital Products</span><strong id="totalProducts">0</strong><small>Company portfolio</small></div>
+          <div class="stat-card"><span>Recorded Revenue</span><strong id="totalRevenue">Rp0</strong><small>Simulated / recorded</small></div>
         </div>
-        <button class="primary-button" id="openCommand">
-          + Beri Perintah
-        </button>
-      </header>
 
-      <div class="content-area">
-
-        <section class="view active" id="overviewView">
-          <div class="welcome-panel">
-            <div>
-              <span class="eyebrow">YOUR VIRTUAL COMPANY</span>
-              <h2 id="companyName">Mitsal Digital Company</h2>
-              <p id="companyMission">
-                Membangun dan menjual produk digital melalui pemasaran organik.
-              </p>
-            </div>
-            <div class="welcome-mark">AI</div>
-          </div>
-
-          <div class="stats-grid">
-            <div class="stat-card">
-              <span>Total AI Agents</span>
-              <strong id="totalAgents">7</strong>
-              <small>Digital employees</small>
-            </div>
-            <div class="stat-card">
-              <span>Active Tasks</span>
-              <strong id="activeTasks">0</strong>
-              <small>Tasks in progress</small>
-            </div>
-            <div class="stat-card">
-              <span>Products</span>
-              <strong id="totalProducts">0</strong>
-              <small>Registered products</small>
-            </div>
-            <div class="stat-card">
-              <span>Total Revenue</span>
-              <strong id="totalRevenue">Rp0</strong>
-              <small>Recorded sales</small>
-            </div>
-          </div>
-
-          <div class="dashboard-grid">
-            <div class="panel">
-              <div class="panel-heading">
-                <div>
-                  <h3>AI Team</h3>
-                  <p>Aktivitas karyawan virtual.</p>
-                </div>
-                <button class="text-button" data-goto="agents">Lihat semua</button>
-              </div>
-              <div id="overviewAgents" class="agent-mini-list"></div>
-            </div>
-
-            <div class="panel">
-              <div class="panel-heading">
-                <div>
-                  <h3>Recent Activities</h3>
-                  <p>Aktivitas terakhir perusahaan.</p>
-                </div>
-              </div>
-              <div id="overviewActivities" class="activity-list"></div>
-            </div>
-          </div>
-        </section>
-
-        <section class="view" id="officeView">
-          <div class="office-toolbar">
-            <div>
-              <h2>Virtual Office</h2>
-              <p>Kantor 3D dan posisi seluruh AI Agent.</p>
-            </div>
-            <button class="secondary-button" id="resetCamera">Reset Camera</button>
-          </div>
-          <div id="officeScene" class="office-scene"></div>
-          <div class="office-legend">
-            <span><i class="legend-dot working"></i> Working</span>
-            <span><i class="legend-dot idle"></i> Idle</span>
-            <span><i class="legend-dot monitoring"></i> Monitoring</span>
-          </div>
-          <div id="officeAgentDetails" class="office-agent-details">
-            Pilih karakter agent untuk melihat detail.
-          </div>
-        </section>
-
-        <section class="view" id="agentsView">
-          <div class="section-heading">
-            <h2>AI Employees</h2>
-            <p>Struktur organisasi perusahaan virtual.</p>
-          </div>
-          <div id="agentGrid" class="agent-grid"></div>
-        </section>
-
-        <section class="view" id="tasksView">
-          <div class="section-heading">
-            <h2>Task Management</h2>
-            <p>Daftar pekerjaan yang diberikan kepada AI Agent.</p>
-          </div>
-          <div id="taskList" class="panel-list"></div>
-        </section>
-
-        <section class="view" id="productsView">
-          <div class="section-heading heading-with-action">
-            <div>
-              <h2>Digital Products</h2>
-              <p>Kelola produk digital dan tautan toko Lynk.id.</p>
-            </div>
-            <button class="primary-button" id="openProductForm">+ Tambah Produk</button>
-          </div>
-          <form id="productForm" class="panel form-panel hidden">
-            <h3>Tambah Produk</h3>
-            <label>Nama Produk</label>
-            <input id="productName" required placeholder="Contoh: Excel Finance Template">
-            <label>Deskripsi</label>
-            <textarea id="productDescription" required placeholder="Jelaskan manfaat produk"></textarea>
-            <label>Harga (Rupiah)</label>
-            <input id="productPrice" type="number" min="0" required placeholder="50000">
-            <label>Link Lynk.id (opsional)</label>
-            <input id="productUrl" type="url" placeholder="https://lynk.id/...">
-            <div class="form-actions">
-              <button type="button" class="secondary-button" id="cancelProduct">Batal</button>
-              <button type="submit" class="primary-button">Simpan Produk</button>
-            </div>
-          </form>
-          <div id="productList" class="card-grid"></div>
-        </section>
-
-        <section class="view" id="contentView">
-          <div class="section-heading heading-with-action">
-            <div>
-              <h2>Threads Content</h2>
-              <p>Konten organik yang menunggu persetujuan Owner.</p>
-            </div>
-            <button class="primary-button" id="openContentForm">+ Buat Konten</button>
-          </div>
-          <form id="contentForm" class="panel form-panel hidden">
-            <h3>Buat Konten Threads</h3>
-            <label>Topik / Judul</label>
-            <input id="contentTitle" required placeholder="Topik konten">
-            <label>Isi Konten</label>
-            <textarea id="contentBody" required rows="5" placeholder="Tulis konten yang bermanfaat dan relevan..."></textarea>
-            <div class="form-actions">
-              <button type="button" class="secondary-button" id="cancelContent">Batal</button>
-              <button type="submit" class="primary-button">Simpan untuk Review</button>
-            </div>
-          </form>
-          <div id="contentList" class="panel-list"></div>
-        </section>
-
-        <section class="view" id="strategyView">
-          <div class="section-heading">
-            <h2>Business Strategy</h2>
-            <p>Arah bisnis dan keputusan strategis perusahaan.</p>
-          </div>
-          <form id="strategyForm" class="panel form-panel">
-            <label>Target Pasar</label>
-            <textarea id="strategyMarket" rows="2"></textarea>
-            <label>Strategi Bisnis</label>
-            <textarea id="strategyPlan" rows="4"></textarea>
-            <label>Target Bulanan (Rupiah)</label>
-            <input id="strategyTarget" type="number" min="0">
-            <button class="primary-button" type="submit">Simpan Strategi</button>
-          </form>
-        </section>
-
-        <section class="view" id="financeView">
-          <div class="section-heading">
-            <h2>Finance</h2>
-            <p>Ringkasan keuangan perusahaan.</p>
-          </div>
-          <div id="financeSummary" class="stats-grid"></div>
-          <form id="saleForm" class="panel form-panel">
-            <h3>Catat Penjualan</h3>
-            <label>Nama Produk</label>
-            <input id="saleProduct" required placeholder="Nama produk">
-            <label>Nominal Penjualan (Rupiah)</label>
-            <input id="saleAmount" type="number" min="1" required>
-            <button class="primary-button" type="submit">Catat Penjualan</button>
-          </form>
-          <div id="salesList" class="panel-list"></div>
-        </section>
-
-        <section class="view" id="engineView">
-          <div class="section-heading">
-            <h2>AI Engine Configuration</h2>
-            <p>Pilih mesin yang menjalankan pekerjaan AI Agent.</p>
+        <div class="dashboard-grid">
+          <div class="panel">
+            <div class="panel-heading"><div><h3>Company Team</h3><p>Status seluruh agent.</p></div><button class="text-button" data-goto="agents">Lihat semua</button></div>
+            <div id="overviewAgents" class="agent-mini-list"></div>
           </div>
           <div class="panel">
-            <label>Active AI Engine</label>
-            <select id="engineSelect">
-              <option value="simulation">Simulation Engine</option>
-              <option value="hermes">Hermes via VPS</option>
-              <option value="custom">Custom AI Backend</option>
-            </select>
-            <div id="remoteSettings" class="hidden">
-              <label>Backend API URL</label>
-              <input id="apiEndpoint" type="url" placeholder="https://api.domainkamu.com">
-              <label>API Key (opsional, untuk demonstrasi saja)</label>
-              <p class="warning-text">
-                Jangan menyimpan secret API key di browser. Autentikasi produksi harus dilakukan melalui backend.
-              </p>
-            </div>
-            <div class="form-actions">
-              <button class="primary-button" id="saveEngine">Simpan Konfigurasi</button>
-              <button class="secondary-button" id="testEngine">Tes Koneksi</button>
-            </div>
-            <p id="engineMessage" class="helper-text"></p>
+            <div class="panel-heading"><div><h3>Business Progress</h3><p>Perkembangan simulasi bisnis.</p></div></div>
+            <div id="businessProgress" class="progress-list"></div>
           </div>
-          <div class="panel info-panel">
-            <h3>Bagaimana perpindahan engine bekerja?</h3>
-            <p>Simulation menjalankan logika lokal. Hermes dan Custom AI akan dipanggil melalui backend yang mengikuti kontrak API proyek ini. Memilih Hermes belum berarti Hermes sudah terhubung.</p>
-          </div>
-        </section>
+        </div>
 
-        <section class="view" id="integrationsView">
-          <div class="section-heading">
-            <h2>Integrations</h2>
-            <p>Layanan eksternal perusahaan.</p>
-          </div>
-          <div class="integration-grid">
-            <div class="panel integration-card"><h3>Threads</h3><p>Konten organik dan interaksi audiens.</p><span class="status-pill pending">Belum terhubung</span></div>
-            <div class="panel integration-card"><h3>Lynk.id</h3><p>Etalase produk dan checkout.</p><span class="status-pill pending">Link manual</span></div>
-            <div class="panel integration-card"><h3>Telegram</h3><p>Owner command melalui bot.</p><span class="status-pill pending">Belum terhubung</span></div>
-            <div class="panel integration-card"><h3>WhatsApp</h3><p>Notifikasi dan komunikasi Owner.</p><span class="status-pill pending">Belum terhubung</span></div>
-            <div class="panel integration-card"><h3>Hermes</h3><p>AI execution engine di VPS.</p><span class="status-pill pending">Belum terhubung</span></div>
-          </div>
-        </section>
+        <div class="panel timeline-panel">
+          <div class="panel-heading"><div><h3>Live Company Activity</h3><p>Aktivitas yang terjadi di perusahaan.</p></div></div>
+          <div id="overviewActivities" class="activity-list"></div>
+        </div>
+      </section>
 
-        <section class="view" id="activityView">
-          <div class="section-heading">
-            <h2>Activity Log</h2>
-            <p>Riwayat aktivitas perusahaan.</p>
+      <section class="view" id="officeView">
+        <div class="office-toolbar">
+          <div><h2>Virtual Headquarters</h2><p>Kantor modern dengan ruang kerja setiap departemen.</p></div>
+          <div class="toolbar-actions">
+            <button class="secondary-button" id="resetCamera">Reset View</button>
+            <button class="secondary-button" id="meetingButton">Mulai Meeting</button>
           </div>
-          <div id="activityList" class="panel-list"></div>
-        </section>
+        </div>
 
-      </div>
-    </main>
-  </div>
+        <div class="office-stage">
+          <div id="officeScene" class="office-scene"></div>
+          <div class="scene-overlay">
+            <span class="live-indicator"></span> LIVE SIMULATION
+          </div>
+          <div class="scene-hint">Drag untuk memutar · Scroll untuk zoom · Klik agent untuk detail</div>
+        </div>
 
-  <div id="commandModal" class="modal hidden">
-    <div class="modal-card">
-      <button class="modal-close" id="closeCommand">×</button>
-      <span class="eyebrow">OWNER COMMAND</span>
-      <h2>Berikan perintah kepada CEO</h2>
-      <p>CEO akan membagi perintah menjadi pekerjaan untuk tim.</p>
-      <form id="commandForm">
-        <textarea id="ownerCommand" required rows="5" placeholder="Contoh: Riset ide produk digital yang dibutuhkan pekerja kantoran di Indonesia."></textarea>
-        <button class="primary-button full-width" type="submit" id="submitCommand">Kirim Perintah</button>
-      </form>
+        <div class="office-legend">
+          <span><i class="legend-dot working"></i> Working</span>
+          <span><i class="legend-dot walking"></i> Walking</span>
+          <span><i class="legend-dot meeting"></i> Meeting</span>
+          <span><i class="legend-dot idle"></i> Idle</span>
+        </div>
+
+        <div class="panel selected-agent-panel" id="officeAgentDetails">
+          Pilih karakter agent untuk melihat detail pekerjaan.
+        </div>
+      </section>
+
+      <section class="view" id="agentsView">
+        <div class="section-heading"><h2>AI Employees</h2><p>Struktur organisasi perusahaan.</p></div>
+        <div id="agentGrid" class="agent-grid"></div>
+      </section>
+
+      <section class="view" id="tasksView">
+        <div class="section-heading"><h2>Task Management</h2><p>Semua pekerjaan yang diberikan oleh CEO dan Owner.</p></div>
+        <div id="taskList" class="panel-list"></div>
+      </section>
+
+      <section class="view" id="productsView">
+        <div class="section-heading heading-with-action">
+          <div><h2>Digital Products</h2><p>Portofolio produk digital perusahaan.</p></div>
+          <button class="primary-button" id="openProductForm">＋ Tambah Produk</button>
+        </div>
+        <form id="productForm" class="panel form-panel hidden">
+          <h3>Tambah Produk</h3>
+          <label>Nama produk</label><input id="productName" required>
+          <label>Deskripsi</label><textarea id="productDescription" required></textarea>
+          <label>Harga (Rupiah)</label><input id="productPrice" type="number" min="0" required>
+          <label>Link Lynk.id</label><input id="productUrl" type="url">
+          <div class="form-actions"><button type="button" class="secondary-button" id="cancelProduct">Batal</button><button class="primary-button">Simpan</button></div>
+        </form>
+        <div id="productList" class="card-grid"></div>
+      </section>
+
+      <section class="view" id="contentView">
+        <div class="section-heading heading-with-action">
+          <div><h2>Threads Content</h2><p>Konten pemasaran organik dan edukatif.</p></div>
+          <button class="primary-button" id="openContentForm">＋ Buat Konten</button>
+        </div>
+        <form id="contentForm" class="panel form-panel hidden">
+          <h3>Buat konten</h3>
+          <label>Judul</label><input id="contentTitle" required>
+          <label>Isi konten</label><textarea id="contentBody" rows="5" required></textarea>
+          <div class="form-actions"><button type="button" class="secondary-button" id="cancelContent">Batal</button><button class="primary-button">Simpan untuk Review</button></div>
+        </form>
+        <div id="contentList" class="panel-list"></div>
+      </section>
+
+      <section class="view" id="strategyView">
+        <div class="section-heading"><h2>Business Strategy</h2><p>Arah dan sasaran perusahaan.</p></div>
+        <form id="strategyForm" class="panel form-panel">
+          <label>Target pasar</label><textarea id="strategyMarket" rows="2"></textarea>
+          <label>Strategi bisnis</label><textarea id="strategyPlan" rows="5"></textarea>
+          <label>Target pendapatan bulanan (Rp)</label><input id="strategyTarget" type="number" min="0">
+          <button class="primary-button">Simpan Strategi</button>
+        </form>
+      </section>
+
+      <section class="view" id="financeView">
+        <div class="section-heading"><h2>Finance</h2><p>Catatan transaksi dan perkembangan keuangan.</p></div>
+        <div id="financeSummary" class="stats-grid"></div>
+        <form id="saleForm" class="panel form-panel">
+          <h3>Catat penjualan</h3>
+          <label>Nama produk</label><input id="saleProduct" required>
+          <label>Nominal (Rp)</label><input id="saleAmount" type="number" min="1" required>
+          <button class="primary-button">Catat Penjualan</button>
+        </form>
+        <div id="salesList" class="panel-list"></div>
+      </section>
+
+      <section class="view" id="engineView">
+        <div class="section-heading"><h2>AI Engine</h2><p>Mesin yang menjalankan perusahaan virtual.</p></div>
+        <div class="panel">
+          <label>Engine Mode</label>
+          <select id="engineSelect">
+            <option value="simulation">Simulation Engine</option>
+            <option value="hermes">Hermes via VPS</option>
+            <option value="custom">Custom AI Backend</option>
+          </select>
+          <div id="remoteSettings" class="hidden">
+            <label>Backend API URL</label><input id="apiEndpoint" type="url" placeholder="https://api.domainkamu.com">
+            <p class="warning-text">Jangan simpan API secret di frontend.</p>
+          </div>
+          <div class="form-actions"><button class="primary-button" id="saveEngine">Simpan</button><button class="secondary-button" id="testEngine">Tes Koneksi</button></div>
+          <p id="engineMessage" class="helper-text"></p>
+        </div>
+      </section>
+
+      <section class="view" id="activityView">
+        <div class="section-heading"><h2>Activity Log</h2><p>Riwayat pekerjaan dan keputusan perusahaan.</p></div>
+        <div id="activityList" class="panel-list"></div>
+      </section>
     </div>
+  </main>
+</div>
+
+<div id="commandModal" class="modal hidden">
+  <div class="modal-card">
+    <button class="modal-close" id="closeCommand">×</button>
+    <span class="eyebrow">OWNER COMMAND</span>
+    <h2>Berikan instruksi kepada CEO</h2>
+    <p>CEO akan melakukan briefing dan membagikan pekerjaan kepada agent yang relevan.</p>
+    <form id="commandForm">
+      <textarea id="ownerCommand" rows="5" required placeholder="Contoh: Buat bisnis produk digital untuk pekerja kantoran di Indonesia. Cari masalah pelanggan, buat ide produk, hitung harga, dan siapkan strategi pemasaran Threads."></textarea>
+      <button class="primary-button full-width" id="submitCommand">Kirim Perintah</button>
+    </form>
   </div>
+</div>
 
-  <div id="toast" class="toast"></div>
-
-  <script type="module" src="./assets/js/main.js"></script>
+<div id="toast" class="toast"></div>
+<script type="module" src="./assets/js/main.js"></script>
 </body>
 </html>
